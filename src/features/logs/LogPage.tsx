@@ -75,7 +75,7 @@ export function LogPage() {
   const [isRetrying, setIsRetrying] = useState<number | null>(null);
 
   const outboxItems = useLiveQuery(
-    () => db.outbox.orderBy("createdAt").reverse().limit(200).toArray(),
+    () => db.outbox.orderBy("createdAt").reverse().limit(100).toArray(),
     [],
     []
   );
@@ -158,8 +158,8 @@ export function LogPage() {
                 key={status}
                 onClick={() => setFilter(status)}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${filter === status
-                    ? "bg-slate-800 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  ? "bg-slate-800 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
               >
                 {status === "all" ? "Semua" : STATUS_CONFIG[status].label} ({counts[status]})

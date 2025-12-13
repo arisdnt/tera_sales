@@ -1,6 +1,7 @@
 import { X, Save, Banknote } from "lucide-react";
 import { useState } from "react";
 import { db } from "../../db/schema";
+import { insertWithSync } from "../../utils/syncOperations";
 
 type Props = {
     onClose: () => void;
@@ -24,16 +25,10 @@ export function TambahSetoranModal({ onClose, onSave }: Props) {
 
         setSaving(true);
         try {
-            const now = new Date().toISOString();
-            const maxSetoran = await db.setoran.orderBy("id_setoran").last();
-            const newId = (maxSetoran?.id_setoran ?? 0) + 1;
-
-            await db.setoran.add({
-                id_setoran: newId,
+            // insertWithSync will generate negative local ID automatically
+            await insertWithSync("setoran", "id_setoran", {
                 total_setoran: totalSetoran,
                 penerima_setoran: penerimaSetoran.trim(),
-                dibuat_pada: now,
-                diperbarui_pada: now,
             });
 
             onSave();

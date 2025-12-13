@@ -1,4 +1,5 @@
 import { db } from "../../db/schema";
+import { insertWithSync } from "../../utils/syncOperations";
 import type { StoreRow } from "./types";
 
 export async function savePenagihan(
@@ -12,7 +13,7 @@ export async function savePenagihan(
         const maxPenagihan = await db.penagihan.orderBy("id_penagihan").last();
         const newPenagihanId = (maxPenagihan?.id_penagihan ?? 0) + 1;
 
-        await db.penagihan.add({
+        await insertWithSync("penagihan", "id_penagihan", {
             id_penagihan: newPenagihanId,
             id_toko: row.id_toko,
             total_uang_diterima: row.total_uang_diterima,
@@ -26,7 +27,7 @@ export async function savePenagihan(
         for (const [produkIdStr, qty] of Object.entries(row.priority_terjual)) {
             if (qty <= 0) continue;
             const maxDetail = await db.detail_penagihan.orderBy("id_detail_tagih").last();
-            await db.detail_penagihan.add({
+            await insertWithSync("detail_penagihan", "id_detail_tagih", {
                 id_detail_tagih: (maxDetail?.id_detail_tagih ?? 0) + 1,
                 id_penagihan: newPenagihanId,
                 id_produk: Number(produkIdStr),
@@ -41,7 +42,7 @@ export async function savePenagihan(
         for (const item of row.non_priority_items) {
             if (item.id_produk <= 0 || item.jumlah_terjual <= 0) continue;
             const maxDetail = await db.detail_penagihan.orderBy("id_detail_tagih").last();
-            await db.detail_penagihan.add({
+            await insertWithSync("detail_penagihan", "id_detail_tagih", {
                 id_detail_tagih: (maxDetail?.id_detail_tagih ?? 0) + 1,
                 id_penagihan: newPenagihanId,
                 id_produk: item.id_produk,
@@ -55,7 +56,7 @@ export async function savePenagihan(
         // Create potongan if applicable
         if (row.ada_potongan && row.jumlah_potongan > 0) {
             const maxPotongan = await db.potongan_penagihan.orderBy("id_potongan").last();
-            await db.potongan_penagihan.add({
+            await insertWithSync("potongan_penagihan", "id_potongan", {
                 id_potongan: (maxPotongan?.id_potongan ?? 0) + 1,
                 id_penagihan: newPenagihanId,
                 jumlah_potongan: row.jumlah_potongan,
@@ -80,7 +81,7 @@ export async function savePenagihan(
                 const maxPengiriman = await db.pengiriman.orderBy("id_pengiriman").last();
                 const newPengirimanId = (maxPengiriman?.id_pengiriman ?? 0) + 1;
 
-                await db.pengiriman.add({
+                await insertWithSync("pengiriman", "id_pengiriman", {
                     id_pengiriman: newPengirimanId,
                     id_toko: row.id_toko,
                     tanggal_kirim: row.tanggal_pembayaran,
@@ -91,7 +92,7 @@ export async function savePenagihan(
 
                 for (const item of soldItems) {
                     const maxDetail = await db.detail_pengiriman.orderBy("id_detail_kirim").last();
-                    await db.detail_pengiriman.add({
+                    await insertWithSync("detail_pengiriman", "id_detail_kirim", {
                         id_detail_kirim: (maxDetail?.id_detail_kirim ?? 0) + 1,
                         id_pengiriman: newPengirimanId,
                         id_produk: item.id_produk,

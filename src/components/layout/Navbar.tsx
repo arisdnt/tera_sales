@@ -26,9 +26,10 @@ type Props = {
   rightSlot?: ReactNode;
   onRsyncCloud?: () => void;
   isRsyncing?: boolean;
+  onLogout?: () => void;
 };
 
-export function Navbar({ title = "Tera Sales", tab, onChangeTab, rightSlot, showNav = true, onRsyncCloud, isRsyncing }: Props) {
+export function Navbar({ title = "Tera Sales", tab, onChangeTab, rightSlot, showNav = true, onRsyncCloud, isRsyncing, onLogout }: Props) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   const handleMenuClick = (menuItem: string) => {
@@ -121,8 +122,8 @@ export function Navbar({ title = "Tera Sales", tab, onChangeTab, rightSlot, show
         <div className="flex items-center gap-2 ml-auto" data-tauri-drag-region="false">
           <button
             className={`h-8 px-3 flex items-center text-xs font-semibold transition-all duration-150 ${isRsyncing
-                ? "bg-teal-700 text-white cursor-wait"
-                : "bg-transparent text-white hover:bg-teal-600 hover:text-white"
+              ? "bg-teal-700 text-white cursor-wait"
+              : "bg-transparent text-white hover:bg-teal-600 hover:text-white"
               }`}
             onClick={onRsyncCloud}
             disabled={isRsyncing}
@@ -133,10 +134,7 @@ export function Navbar({ title = "Tera Sales", tab, onChangeTab, rightSlot, show
           </button>
           <button
             className="h-8 px-3 flex items-center text-xs font-semibold bg-transparent text-white hover:bg-red-600 hover:text-white transition-all duration-150"
-            onClick={() => {
-              // Handle logout logic here
-              console.log("Logout clicked");
-            }}
+            onClick={onLogout}
             title="Logout"
           >
             <FiLogOut className="mr-1.5" size={14} />

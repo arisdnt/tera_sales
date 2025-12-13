@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { signInWithPassword } from "../../services/authService";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
@@ -28,21 +29,35 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex h-full w-full">
+    <div className="flex h-full w-full relative" data-tauri-drag-region>
+      {/* Window Close Control - Top Right */}
+      <div className="absolute top-0 right-0 z-50 flex border border-slate-200" data-tauri-drag-region="false">
+        <button
+          className="w-10 h-10 flex items-center justify-center hover:bg-red-600 bg-white text-red-500 hover:text-white transition-colors"
+          onClick={() => getCurrentWindow().close()}
+          title="Close"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
       {/* Left Panel - Image Only (80%) */}
       <div
         className="hidden lg:block lg:w-4/5 relative overflow-hidden bg-slate-900"
+        data-tauri-drag-region
       >
         <img
           src="/login-illustration.png"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-90"
+          className="absolute inset-0 w-full h-full object-cover opacity-90 pointer-events-none"
         />
       </div>
 
       {/* Right Panel - Login Form (20%) */}
-      <div className="w-full lg:w-1/5 flex items-center justify-center bg-white px-6 py-12">
-        <div className="w-full max-w-sm">
+      <div className="w-full lg:w-1/5 flex items-center justify-center bg-white px-6 py-12" data-tauri-drag-region>
+        <div className="w-full max-w-sm" data-tauri-drag-region="false">
           {/* Login Card */}
           <div className="bg-white">
             {/* Form */}

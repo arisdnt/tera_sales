@@ -1,6 +1,7 @@
 import { X, Save, Receipt } from "lucide-react";
 import { useState } from "react";
 import { db } from "../../db/schema";
+import { insertWithSync } from "../../utils/syncOperations";
 
 type Props = {
     onClose: () => void;
@@ -25,18 +26,12 @@ export function TambahPengeluaranModal({ onClose, onSave }: Props) {
 
         setSaving(true);
         try {
-            const now = new Date().toISOString();
-            const maxPengeluaran = await db.pengeluaran_operasional.orderBy("id_pengeluaran").last();
-            const newId = (maxPengeluaran?.id_pengeluaran ?? 0) + 1;
-
-            await db.pengeluaran_operasional.add({
-                id_pengeluaran: newId,
+            // insertWithSync will generate negative local ID automatically
+            await insertWithSync("pengeluaran_operasional", "id_pengeluaran", {
                 jumlah: jumlah,
                 keterangan: keterangan.trim(),
                 url_bukti_foto: null,
                 tanggal_pengeluaran: tanggal + "T00:00:00Z",
-                dibuat_pada: now,
-                diperbarui_pada: now,
             });
 
             onSave();

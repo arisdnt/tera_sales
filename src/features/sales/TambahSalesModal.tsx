@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { X, Save, User, Phone, Plus } from "lucide-react";
+import { X, Save, User, Phone } from "lucide-react";
 import { db } from "../../db/schema";
+import { insertWithSync } from "../../utils/syncOperations";
 
 type Props = {
     onClose: () => void;
@@ -23,17 +24,11 @@ export function TambahSalesModal({ onClose, onSave }: Props) {
 
         setSaving(true);
         try {
-            const now = new Date().toISOString();
-            const maxSales = await db.sales.orderBy("id_sales").last();
-            const nextId = (maxSales?.id_sales ?? 0) + 1;
-
-            await db.sales.add({
-                id_sales: nextId,
+            // insertWithSync will generate negative local ID automatically
+            await insertWithSync("sales", "id_sales", {
                 nama_sales: namaSales.trim(),
                 nomor_telepon: nomorTelepon.trim() || null,
                 status_aktif: statusAktif,
-                dibuat_pada: now,
-                diperbarui_pada: now,
             });
 
             onSave();

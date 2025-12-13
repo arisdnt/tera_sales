@@ -1,6 +1,7 @@
 import { X, Save, Store, Users, Plus, Trash2 } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { db } from "../../db/schema";
+import { insertWithSync } from "../../utils/syncOperations";
 import { useLiveQuery } from "dexie-react-hooks";
 
 type Props = {
@@ -75,13 +76,9 @@ export function TambahTokoModal({ onClose, onSave }: Props) {
 
         setSaving(true);
         try {
-            const now = new Date().toISOString();
-            const maxToko = await db.toko.orderBy("id_toko").last();
-            let nextId = (maxToko?.id_toko ?? 0) + 1;
-
+            // insertWithSync will generate negative local ID automatically for each row
             for (const row of validRows) {
-                await db.toko.add({
-                    id_toko: nextId++,
+                await insertWithSync("toko", "id_toko", {
                     nama_toko: row.namaToko.trim(),
                     kecamatan: row.kecamatan.trim(),
                     kabupaten: row.kabupaten.trim(),
@@ -89,8 +86,6 @@ export function TambahTokoModal({ onClose, onSave }: Props) {
                     link_gmaps: row.linkGmaps.trim() || null,
                     id_sales: selectedSalesId,
                     status_toko: row.statusToko,
-                    dibuat_pada: now,
-                    diperbarui_pada: now,
                 });
             }
 

@@ -191,11 +191,11 @@ export function TambahPembayaranModal({ onClose, onSave }: Props) {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4">
-                    {/* Sales and Toko Search in One Row */}
+                    {/* Sales, Toko Search, Total Nominal, N Toko in One Row */}
                     <div className="flex items-center gap-4 mb-4">
-                        <div className="flex items-center gap-2 flex-1">
+                        <div className="flex items-center gap-2">
                             <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Pilih Sales:</label>
-                            <select value={selectedSalesId ?? ""} onChange={(e) => { setSelectedSalesId(Number(e.target.value) || null); setStoreRows([]); }} className="flex-1 h-9 px-3 border border-slate-300 text-sm">
+                            <select value={selectedSalesId ?? ""} onChange={(e) => { setSelectedSalesId(Number(e.target.value) || null); setStoreRows([]); }} className="w-40 h-9 px-3 border border-slate-300 text-sm">
                                 <option value="">-- Pilih Sales --</option>
                                 {salesOptions?.map((s) => (<option key={s.id_sales} value={s.id_sales}>{s.nama_sales}</option>))}
                             </select>
@@ -212,7 +212,15 @@ export function TambahPembayaranModal({ onClose, onSave }: Props) {
                                 )}
                             </div>
                         </div>
-                        {storeRows.length > 0 && (<div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-3 py-1.5 border border-green-200"><div className="w-2 h-2 bg-green-500 rounded-full" />{storeRows.length} toko</div>)}
+                        {/* Total Nominal - Large Font */}
+                        <div className="flex items-center h-9 px-3 bg-[#005461]/10 border border-[#005461]/20">
+                            <span className="text-base font-bold text-[#005461]">Rp {summary.totalNominal.toLocaleString("id-ID")}</span>
+                        </div>
+                        {/* N Toko Counter */}
+                        <div className="flex items-center gap-1 h-9 px-3 bg-green-50 border border-green-200">
+                            <span className="text-base font-bold text-green-700">{summary.storeCount}</span>
+                            <span className="text-xs text-green-600">Toko</span>
+                        </div>
                     </div>
                     {storeRows.map((row, storeIndex) => (
                         <StoreSection key={row.id_toko} row={row} storeIndex={storeIndex} priorityProducts={priorityProducts} nonPriorityProducts={nonPriorityProducts} onRemove={() => removeStore(storeIndex)} onUpdatePriorityQty={(produkId, qty) => updatePriorityQty(storeIndex, produkId, qty)} onToggleNonPriority={(checked) => toggleNonPriority(storeIndex, checked)} onAddNonPriorityItem={() => addNonPriorityItem(storeIndex)} onUpdateNonPriorityItem={(itemIndex, field, value) => updateNonPriorityItem(storeIndex, itemIndex, field, value)} onRemoveNonPriorityItem={(itemIndex) => removeNonPriorityItem(storeIndex, itemIndex)} onUpdatePaymentField={(field, value) => updatePaymentField(storeIndex, field, value)} />

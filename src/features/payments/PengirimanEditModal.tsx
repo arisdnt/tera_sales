@@ -3,6 +3,7 @@ import { X, Plus, Trash2, Save, Package } from "lucide-react";
 import type { PengirimanDashboardRow } from "../../db/supabaseViewsExtras";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../db/schema";
+import { insertWithSync, updateWithSync, deleteWithSync } from "../../utils/syncOperations";
 import type { DetailPengirimanRow } from "../../db/supabaseTables";
 
 type Props = {
@@ -102,23 +103,22 @@ export function PengirimanEditModal({ row, onClose, onSave }: Props) {
             const keepIds = details.filter((d) => d.id_detail_kirim).map((d) => d.id_detail_kirim!);
             const toDelete = existingDetails.filter((d) => !keepIds.includes(d.id_detail_kirim));
             for (const item of toDelete) {
-                await db.detail_pengiriman.delete(item.id_detail_kirim);
+                await deleteWithSync("detail_pengiriman", "id_detail_kirim", item.id_detail_kirim);
             }
 
             // Update existing and add new
             for (const detail of details) {
                 if (detail.id_detail_kirim) {
                     // Update existing
-                    await db.detail_pengiriman.update(detail.id_detail_kirim, {
+                    await updateWithSync("detail_pengiriman", "id_detail_kirim", detail.id_detail_kirim, {
                         id_produk: detail.id_produk,
                         jumlah_kirim: detail.jumlah_kirim,
-                        diperbarui_pada: new Date().toISOString(),
                     });
                 } else {
                     // Add new
                     const maxId = await db.detail_pengiriman.orderBy("id_detail_kirim").last();
                     const newId = (maxId?.id_detail_kirim ?? 0) + 1;
-                    await db.detail_pengiriman.add({
+                    await insertWithSync("detail_pengiriman", "id_detail_kirim", {
                         id_detail_kirim: newId,
                         id_pengiriman: row.id_pengiriman,
                         id_produk: detail.id_produk,

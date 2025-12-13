@@ -84,9 +84,20 @@ export function App() {
     }
   }, [isRsyncing]);
 
+  const handleLogout = useCallback(async () => {
+    try {
+      console.log('App: Starting logout...');
+      await signOut();
+      console.log('App: Logout completed');
+    } catch (error) {
+      console.error('App: Logout failed:', error);
+    }
+  }, []);
+
   const setTab = useCallback((next: TabKey) => {
     setTabState(next);
   }, []);
+
 
   useEffect(() => {
     const path = TAB_TO_PATH[tab] ?? "/dashboard";
@@ -114,6 +125,7 @@ export function App() {
           rightSlot={isSignedIn ? <AuthRight email={auth.user?.email ?? null} /> : null}
           onRsyncCloud={handleRsyncCloud}
           isRsyncing={isRsyncing}
+          onLogout={handleLogout}
         />
       )}
       <main className="flex-1 overflow-hidden">
