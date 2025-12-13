@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Tera Sales",
+  "version": "0.1.0",
+  "identifier": "com.tera.sales",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Tera Sales",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 980,
+        "minHeight": 640,
+        "decorations": false,
+        "resizable": true
+      }
+    ]
+  }
+}
+

@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+html,
+body {
+    height: 100%;
+    @apply overflow-hidden;
+}
+
+body {
+    @apply bg-zinc-50 text-zinc-900;
+}
+
+  * {
+    @apply select-text;
+  }
+
+.table-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 transparent;
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+  }
+  .table-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .table-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .table-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.8);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .table-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(71, 85, 105, 0.9);
+  }
+}
