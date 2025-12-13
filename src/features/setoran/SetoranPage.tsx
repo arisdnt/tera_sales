@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
-import { Plus, Search, Calendar, RefreshCw, Eye, Edit, Trash2 } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { List } from "react-window";
+import { Plus, Search, Calendar, RotateCcw, Download, Eye, Edit, Trash2, Filter, Banknote } from "lucide-react";
 import { SetoranKPICards } from "./SetoranKPICards";
 import { TambahSetoranModal } from "./TambahSetoranModal";
 import { useSetoranData, type DateRangeKey, type CashFlowEvent } from "./useSetoranData";
@@ -25,98 +26,144 @@ export function SetoranPage() {
 
     const { events, kpis } = useSetoranData(dateRange);
 
-    const filteredEvents = events.filter((e) => {
-        if (eventFilter !== "all" && e.type !== eventFilter) return false;
-        if (search) {
-            const s = search.toLowerCase();
-            if (
-                !e.description.toLowerCase().includes(s) &&
-                !e.tokoName.toLowerCase().includes(s) &&
-                !e.salesName.toLowerCase().includes(s) &&
-                !(e.penerimaSetoran || "").toLowerCase().includes(s)
-            )
-                return false;
-        }
-        return true;
-    });
+    const filteredEvents = useMemo(() => {
+        return events.filter((e) => {
+            if (eventFilter !== "all" && e.type !== eventFilter) return false;
+            if (search) {
+                const s = search.toLowerCase();
+                if (
+                    !e.description.toLowerCase().includes(s) &&
+                    !e.tokoName.toLowerCase().includes(s) &&
+                    !e.salesName.toLowerCase().includes(s) &&
+                    !(e.penerimaSetoran || "").toLowerCase().includes(s)
+                )
+                    return false;
+            }
+            return true;
+        });
+    }, [events, eventFilter, search]);
 
     const handleRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
+    const resetFilters = () => {
+        setDateRange("current_month");
+        setSearch("");
+        setEventFilter("all");
+    };
+
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-slate-50">
-            <div className="flex-1 overflow-auto p-4">
-                {/* Filters */}
-                <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-white border border-slate-200">
-                    <div className="flex items-center gap-2">
-                        <Search size={14} className="text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Cari transaksi..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="h-8 w-48 px-3 border border-slate-300 text-sm"
-                        />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Calendar size={14} className="text-slate-400" />
-                        <select
-                            value={dateRange}
-                            onChange={(e) => setDateRange(e.target.value as DateRangeKey)}
-                            className="h-8 px-3 border border-slate-300 text-sm"
+        <div className="flex h-full w-full flex-col bg-white">
+            <div className="min-w-[1000px] flex-1 flex flex-col overflow-hidden px-2">
+                {/* Filters Section */}
+                <div className="flex flex-col gap-3 border-l border-r border-b border-slate-200 bg-white px-3 py-3 lg:flex-row lg:items-end">
+                    <div className="grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto lg:items-center">
+                        {/* Search */}
+                        <div className="relative col-span-2 lg:w-64">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                            <input
+                                className="h-9 w-full border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                                placeholder="Cari transaksi..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                        </div>
+
+                        {/* Date Range */}
+                        <div className="relative col-span-1 lg:w-40">
+                            <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                            <select
+                                className="h-9 w-full appearance-none border border-slate-300 bg-white pl-9 pr-8 text-sm text-slate-900 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                                value={dateRange}
+                                onChange={(e) => setDateRange(e.target.value as DateRangeKey)}
+                            >
+                                {DATE_RANGE_OPTIONS.map((opt) => (
+                                    <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Event Type Filter */}
+                        <div className="relative col-span-1 lg:w-44">
+                            <Filter className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                            <select
+                                className="h-9 w-full appearance-none border border-slate-300 bg-white pl-9 pr-8 text-sm text-slate-900 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                                value={eventFilter}
+                                onChange={(e) => setEventFilter(e.target.value as typeof eventFilter)}
+                            >
+                                <option value="all">Semua Transaksi</option>
+                                <option value="CASH_IN">💰 Cash Masuk</option>
+                                <option value="TRANSFER_IN">💳 Transfer Masuk</option>
+                                <option value="SETORAN">📤 Setoran</option>
+                            </select>
+                        </div>
+
+                        {/* Reset */}
+                        <button
+                            className="flex h-9 items-center justify-center border border-slate-300 bg-white px-3 text-slate-700 hover:bg-slate-50 lg:w-auto"
+                            onClick={resetFilters}
+                            title="Reset Filter"
                         >
-                            {DATE_RANGE_OPTIONS.map((opt) => (
-                                <option key={opt.key} value={opt.key}>
-                                    {opt.label}
-                                </option>
-                            ))}
-                        </select>
+                            <RotateCcw size={16} />
+                        </button>
                     </div>
-                    <select
-                        value={eventFilter}
-                        onChange={(e) => setEventFilter(e.target.value as typeof eventFilter)}
-                        className="h-8 px-3 border border-slate-300 text-sm"
-                    >
-                        <option value="all">Semua Transaksi</option>
-                        <option value="CASH_IN">💰 Cash Masuk</option>
-                        <option value="TRANSFER_IN">💳 Transfer Masuk</option>
-                        <option value="SETORAN">📤 Setoran</option>
-                    </select>
-                    <button
-                        onClick={handleRefresh}
-                        className="h-8 px-3 border border-slate-300 text-slate-600 hover:bg-slate-50"
-                    >
-                        <RefreshCw size={14} />
-                    </button>
-                    <button
-                        onClick={() => setShowTambahModal(true)}
-                        className="flex items-center gap-2 h-8 px-4 bg-[#005461] text-white text-sm font-semibold hover:bg-teal-700"
-                    >
-                        <Plus size={14} />
-                        Setoran Baru
-                    </button>
-                    <div className="ml-auto text-xs text-slate-500">{filteredEvents.length} transaksi</div>
+
+                    <div className="mt-2 flex w-full gap-2 lg:ml-auto lg:mt-0 lg:w-auto">
+                        <div className="flex items-center gap-2 text-xs text-slate-500 px-2">
+                            {filteredEvents.length} transaksi
+                        </div>
+                        <button className="flex h-9 flex-1 items-center justify-center gap-2 bg-slate-800 px-4 text-sm font-medium text-white hover:bg-slate-900 lg:flex-none">
+                            <Download size={16} />
+                            <span className="whitespace-nowrap">Export</span>
+                        </button>
+                        <button
+                            className="flex h-9 flex-1 items-center justify-center gap-2 bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 lg:flex-none"
+                            onClick={() => setShowTambahModal(true)}
+                        >
+                            <Plus size={16} />
+                            <span className="whitespace-nowrap">Setoran</span>
+                        </button>
+                    </div>
                 </div>
 
-                <SetoranKPICards data={kpis} />
+                {/* KPI Cards */}
+                <div className="border-l border-r border-slate-200 bg-white px-3 py-3">
+                    <SetoranKPICards data={kpis} />
+                </div>
 
-                {/* Data Table */}
-                <div className="bg-white border border-slate-200">
-                    {/* Header */}
-                    <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
-                        <div className="w-[10%] px-2 py-2 border-r border-slate-200">ID & Jenis</div>
-                        <div className="w-[22%] px-2 py-2 border-r border-slate-200">Jumlah & Deskripsi</div>
-                        <div className="w-[18%] px-2 py-2 border-r border-slate-200">Penerima & Balance</div>
-                        <div className="w-[14%] px-2 py-2 border-r border-slate-200">Waktu</div>
-                        <div className="w-[12%] px-2 py-2 border-r border-slate-200">Status</div>
-                        <div className="w-[14%] px-2 py-2 border-r border-slate-200">Area</div>
-                        <div className="w-[10%] px-2 py-2">Aksi</div>
+                {/* Table Section */}
+                <div className="flex-1 flex flex-col overflow-hidden border-l border-slate-200 bg-white">
+                    {/* Table Header - Fixed, div-based to match body */}
+                    <div className="flex bg-slate-100 shadow-[0_2px_4px_-1px_rgba(0,0,0,0.1)] text-sm font-semibold text-slate-900">
+                        <div className="w-[10%] px-2 py-3 border-r border-slate-200 text-center">ID & Jenis</div>
+                        <div className="w-[22%] px-2 py-3 border-r border-slate-200 text-center">Jumlah & Deskripsi</div>
+                        <div className="w-[18%] px-2 py-3 border-r border-slate-200 text-center">Penerima & Balance</div>
+                        <div className="w-[14%] px-2 py-3 border-r border-slate-200 text-center">Waktu</div>
+                        <div className="w-[12%] px-2 py-3 border-r border-slate-200 text-center">Status</div>
+                        <div className="w-[14%] px-2 py-3 border-r border-slate-200 text-center">Area</div>
+                        <div className="w-[10%] px-2 py-3 text-center">Aksi</div>
                     </div>
-                    {/* Body */}
-                    <div className="max-h-[400px] overflow-auto">
+                    {/* Body - Virtualized */}
+                    <div className="flex-1 overflow-hidden [&_*]:[-webkit-scrollbar]:hidden [&_*]:[scrollbar-width:none]">
                         {filteredEvents.length === 0 ? (
-                            <div className="py-12 text-center text-slate-400 text-sm">Tidak ada transaksi</div>
+                            <div className="flex flex-col items-center justify-center gap-2 py-12 text-slate-500">
+                                <Search size={32} className="text-slate-300" />
+                                <p>Tidak ada transaksi</p>
+                            </div>
                         ) : (
-                            filteredEvents.map((e) => <EventRow key={`${e.type}-${e.id}`} event={e} />)
+                            <List
+                                defaultHeight={600}
+                                rowCount={filteredEvents.length}
+                                rowHeight={80}
+                                rowProps={{}}
+                                rowComponent={({ index, style }) => {
+                                    const e = filteredEvents[index];
+                                    return (
+                                        <div style={style}>
+                                            <EventRow key={`${e.type}-${e.id}`} event={e} />
+                                        </div>
+                                    );
+                                }}
+                            />
                         )}
                     </div>
                 </div>
@@ -220,7 +267,7 @@ function EventRow({ event }: { event: CashFlowEvent }) {
             </div>
 
             {/* Area */}
-            <div className="w-[14%] px-2 py-2 border-r border-slate-100 text-slate-600">{event.kecamatan}</div>
+            <div className="w-[14%] px-2 py-2 border-r border-slate-100 text-slate-600 truncate">{event.kecamatan}</div>
 
             {/* Aksi */}
             <div className="w-[10%] px-2 py-2 flex items-start gap-1">

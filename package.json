@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "build:tauri": "tauri build && copy src-tauri\\target\\release\\*.exe . 2>nul || copy src-tauri\\target\\release\\bundle\\nsis\\*.exe . 2>nul"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",

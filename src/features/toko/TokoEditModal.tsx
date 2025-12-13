@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Save, Store, Users } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../db/schema";
+import { updateWithSync } from "../../utils/syncOperations";
 
 type TokoData = {
     id_toko: number;
@@ -43,7 +44,7 @@ export function TokoEditModal({ toko, onClose, onSave }: Props) {
 
         setSaving(true);
         try {
-            await db.toko.update(toko.id_toko, {
+            await updateWithSync("toko", "id_toko", toko.id_toko, {
                 nama_toko: namaToko.trim(),
                 kecamatan: kecamatan.trim(),
                 kabupaten: kabupaten.trim(),
@@ -51,7 +52,6 @@ export function TokoEditModal({ toko, onClose, onSave }: Props) {
                 link_gmaps: linkGmaps.trim() || null,
                 id_sales: idSales,
                 status_toko: statusToko,
-                diperbarui_pada: new Date().toISOString(),
             });
 
             onSave();

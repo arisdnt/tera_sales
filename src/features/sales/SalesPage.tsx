@@ -5,7 +5,7 @@ import { SalesDetailModal } from "./SalesDetailModal";
 import { SalesEditModal } from "./SalesEditModal";
 import { TambahSalesModal } from "./TambahSalesModal";
 import { ConfirmDeleteModal } from "../../components/ConfirmDeleteModal";
-import { db } from "../../db/schema";
+import { deleteWithSync } from "../../utils/syncOperations";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(value);
@@ -35,7 +35,7 @@ export function SalesPage() {
 
   const handleConfirmDelete = async () => {
     if (!deleteSales) return;
-    await db.sales.delete(deleteSales.id);
+    await deleteWithSync("sales", "id_sales", deleteSales.id);
     setDeleteSales(null);
   };
 

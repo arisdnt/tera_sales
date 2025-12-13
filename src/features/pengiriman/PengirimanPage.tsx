@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { List } from "react-window";
 import { Plus, Search, Calendar, RotateCcw, Download, Eye, Edit, Trash2, Users, MapPin, ExternalLink, Package } from "lucide-react";
 import { usePengirimanData, type DateRangeKey, type PengirimanEvent } from "./usePengirimanData";
 
@@ -24,14 +25,16 @@ export function PengirimanPage() {
         filters.dateRange, filters.sales, filters.kabupaten, filters.kecamatan
     );
 
-    const filteredRows = events.filter((e) => {
-        if (filters.search) {
-            const s = filters.search.toLowerCase();
-            if (!e.namaToko.toLowerCase().includes(s) && !e.namaSales.toLowerCase().includes(s) &&
-                !e.kecamatan.toLowerCase().includes(s) && !e.kabupaten.toLowerCase().includes(s)) return false;
-        }
-        return true;
-    });
+    const filteredRows = useMemo(() => {
+        if (!filters.search) return events;
+        const s = filters.search.toLowerCase();
+        return events.filter((e) =>
+            e.namaToko.toLowerCase().includes(s) ||
+            e.namaSales.toLowerCase().includes(s) ||
+            e.kecamatan.toLowerCase().includes(s) ||
+            e.kabupaten.toLowerCase().includes(s)
+        );
+    }, [events, filters.search]);
 
     return (
         <div className="flex h-full w-full flex-col bg-white">
@@ -126,92 +129,98 @@ export function PengirimanPage() {
                 </div>
 
                 {/* Table Section */}
-                <div className="flex-1 overflow-auto border-l border-slate-200 bg-white pb-4 pt-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-                    <div className="w-full">
-                        <table className="w-full table-fixed border-collapse text-left text-sm">
-                            <thead className="sticky top-0 z-10 bg-slate-100 shadow-[0_2px_4px_-1px_rgba(0,0,0,0.1)]">
-                                <tr>
-                                    <th className="w-[10%] border-r border-slate-200 bg-slate-100 py-3 pr-4 font-semibold text-slate-900 text-center">Tanggal</th>
-                                    <th className="w-[10%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">ID Kirim</th>
-                                    <th className="w-[18%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Toko</th>
-                                    <th className="w-[10%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Wilayah</th>
-                                    <th className="w-[12%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Sales</th>
-                                    <th className="w-[8%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Qty</th>
-                                    <th className="w-[20%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Detail Barang</th>
-                                    <th className="w-[12%] border-r border-slate-200 bg-slate-100 pl-4 py-3 font-semibold text-slate-900 text-center">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredRows.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={8} className="py-12 text-center text-slate-400">
-                                            Tidak ada data pengiriman
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredRows.map((row) => <EventRow key={row.id} row={row} />)
-                                )}
-                            </tbody>
-                        </table>
+                <div className="flex-1 flex flex-col overflow-hidden border-l border-slate-200 bg-white">
+                    {/* Table Header - Fixed */}
+                    <table className="w-full table-fixed border-collapse text-left text-sm">
+                        <thead className="bg-slate-100 shadow-[0_2px_4px_-1px_rgba(0,0,0,0.1)]">
+                            <tr>
+                                <th className="w-[10%] border-r border-slate-200 bg-slate-100 py-3 pr-4 font-semibold text-slate-900 text-center">Tanggal</th>
+                                <th className="w-[10%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">ID Kirim</th>
+                                <th className="w-[18%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Toko</th>
+                                <th className="w-[10%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Wilayah</th>
+                                <th className="w-[12%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Sales</th>
+                                <th className="w-[8%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Qty</th>
+                                <th className="w-[20%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Detail Barang</th>
+                                <th className="w-[12%] border-r border-slate-200 bg-slate-100 pl-4 py-3 font-semibold text-slate-900 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                    </table>
+
+                    {/* Virtualized Table Body - Scrollable */}
+                    <div className="flex-1 overflow-hidden">
+                        {filteredRows.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center gap-2 py-12 text-slate-500">
+                                <Search size={32} className="text-slate-300" />
+                                <p>Tidak ada data pengiriman</p>
+                            </div>
+                        ) : (
+                            <List
+                                defaultHeight={600}
+                                rowCount={filteredRows.length}
+                                rowHeight={56}
+                                rowProps={{}}
+                                rowComponent={({ index, style }) => {
+                                    const row = filteredRows[index];
+                                    const date = new Date(row.tanggalKirim);
+                                    return (
+                                        <div style={style} className="hover:bg-slate-50">
+                                            <div className="flex w-full border-b border-slate-100 text-sm">
+                                                {/* Tanggal */}
+                                                <div className="w-[10%] border-r border-slate-200 px-2 py-2 text-center">
+                                                    <span className="text-sm font-medium text-slate-900">
+                                                        {date.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+                                                    </span>
+                                                </div>
+                                                {/* ID */}
+                                                <div className="w-[10%] border-r border-slate-200 px-2 py-2 text-center">
+                                                    <span className="font-mono text-sm font-medium text-slate-900">#{row.id}</span>
+                                                </div>
+                                                {/* Toko */}
+                                                <div className="w-[18%] border-r border-slate-200 px-2 py-2">
+                                                    <div className="text-sm font-medium text-slate-900 truncate">{row.namaToko}</div>
+                                                    {row.linkGmaps && (
+                                                        <a href={row.linkGmaps} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
+                                                            <ExternalLink size={10} />Maps
+                                                        </a>
+                                                    )}
+                                                </div>
+                                                {/* Wilayah */}
+                                                <div className="w-[10%] border-r border-slate-200 px-2 py-2 text-center">
+                                                    <div className="text-xs text-slate-600 truncate">{row.kecamatan}</div>
+                                                    <div className="text-xs text-slate-400 truncate">{row.kabupaten}</div>
+                                                </div>
+                                                {/* Sales */}
+                                                <div className="w-[12%] border-r border-slate-200 px-2 py-2 text-center">
+                                                    <span className="text-sm text-slate-900 truncate">{row.namaSales}</span>
+                                                </div>
+                                                {/* Qty */}
+                                                <div className="w-[8%] border-r border-slate-200 px-2 py-2 text-center">
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <Package size={14} className="text-blue-500" />
+                                                        <span className="text-sm font-semibold text-blue-600">{row.totalQty}</span>
+                                                    </div>
+                                                </div>
+                                                {/* Detail Barang */}
+                                                <div className="w-[20%] border-r border-slate-200 px-2 py-2">
+                                                    <div className="text-xs text-slate-600 truncate" title={row.detailPengiriman}>{row.detailPengiriman || "-"}</div>
+                                                </div>
+                                                {/* Aksi */}
+                                                <div className="w-[12%] border-r border-slate-200 pl-4 py-2">
+                                                    <div className="flex items-center gap-1">
+                                                        <button className="p-1 hover:bg-blue-50 text-blue-600" title="Detail"><Eye size={14} /></button>
+                                                        <button className="p-1 hover:bg-amber-50 text-amber-600" title="Edit"><Edit size={14} /></button>
+                                                        <button className="p-1 hover:bg-red-50 text-red-600" title="Hapus"><Trash2 size={14} /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                }}
+                            />
+                        )}
                     </div>
                 </div>
             </div>
         </div>
-    );
-}
-
-function EventRow({ row }: { row: PengirimanEvent }) {
-    const date = new Date(row.tanggalKirim);
-
-    return (
-        <tr className="border-b border-slate-200 hover:bg-slate-50">
-            {/* Tanggal */}
-            <td className="w-[10%] border-r border-slate-200 px-2 py-3 text-center">
-                <span className="text-sm font-medium text-slate-900">
-                    {date.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "2-digit" })}
-                </span>
-            </td>
-            {/* ID */}
-            <td className="w-[10%] border-r border-slate-200 px-2 py-3 text-center">
-                <span className="font-mono text-sm font-medium text-slate-900">#{row.id}</span>
-            </td>
-            {/* Toko */}
-            <td className="w-[18%] border-r border-slate-200 px-2 py-3">
-                <div className="text-sm font-medium text-slate-900 truncate">{row.namaToko}</div>
-                {row.linkGmaps && (
-                    <a href={row.linkGmaps} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
-                        <ExternalLink size={10} /> Maps
-                    </a>
-                )}
-            </td>
-            {/* Wilayah */}
-            <td className="w-[10%] border-r border-slate-200 px-2 py-3 text-center">
-                <div className="text-xs text-slate-600 truncate">{row.kecamatan}</div>
-                <div className="text-xs text-slate-400 truncate">{row.kabupaten}</div>
-            </td>
-            {/* Sales */}
-            <td className="w-[12%] border-r border-slate-200 px-2 py-3 text-center">
-                <span className="text-sm text-slate-900 truncate">{row.namaSales}</span>
-            </td>
-            {/* Qty */}
-            <td className="w-[8%] border-r border-slate-200 px-2 py-3 text-center">
-                <div className="flex items-center justify-center gap-1">
-                    <Package size={14} className="text-blue-500" />
-                    <span className="text-sm font-semibold text-blue-600">{row.totalQty}</span>
-                </div>
-            </td>
-            {/* Detail Barang */}
-            <td className="w-[20%] border-r border-slate-200 px-2 py-3">
-                <div className="text-xs text-slate-600 truncate" title={row.detailPengiriman}>{row.detailPengiriman || "-"}</div>
-            </td>
-            {/* Aksi */}
-            <td className="w-[12%] border-r border-slate-200 pl-4 py-3">
-                <div className="flex items-center gap-1">
-                    <button className="p-1.5 hover:bg-blue-50 text-blue-600" title="Detail"><Eye size={16} /></button>
-                    <button className="p-1.5 hover:bg-amber-50 text-amber-600" title="Edit"><Edit size={16} /></button>
-                    <button className="p-1.5 hover:bg-red-50 text-red-600" title="Hapus"><Trash2 size={16} /></button>
-                </div>
-            </td>
-        </tr>
     );
 }

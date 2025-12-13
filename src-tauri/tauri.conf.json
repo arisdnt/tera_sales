@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "withGlobalTauri": false,
     "windows": [
       {
         "label": "main",
@@ -21,6 +22,20 @@
         "decorations": false,
         "resizable": true
       }
-    ]
+    ],
+    "security": {
+      "dangerousDisableAssetCspModification": false
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

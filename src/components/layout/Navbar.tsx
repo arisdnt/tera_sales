@@ -13,7 +13,8 @@ import {
   Square as FiMaximize,
   X as FiX,
   ChevronDown as FiChevronDown,
-  ListChecks as FiListChecks
+  ListChecks as FiListChecks,
+  CloudDownload as FiCloudDownload
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -23,9 +24,11 @@ type Props = {
   onChangeTab?: (tab: string) => void;
   showNav?: boolean;
   rightSlot?: ReactNode;
+  onRsyncCloud?: () => void;
+  isRsyncing?: boolean;
 };
 
-export function Navbar({ title = "Tera Sales", tab, onChangeTab, rightSlot, showNav = true }: Props) {
+export function Navbar({ title = "Tera Sales", tab, onChangeTab, rightSlot, showNav = true, onRsyncCloud, isRsyncing }: Props) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   const handleMenuClick = (menuItem: string) => {
@@ -114,8 +117,20 @@ export function Navbar({ title = "Tera Sales", tab, onChangeTab, rightSlot, show
           </nav>
         )}
 
-        {/* Right Section - Logout Button & Window Controls */}
+        {/* Right Section - Rsync, Logout Button & Window Controls */}
         <div className="flex items-center gap-2 ml-auto" data-tauri-drag-region="false">
+          <button
+            className={`h-8 px-3 flex items-center text-xs font-semibold transition-all duration-150 ${isRsyncing
+                ? "bg-teal-700 text-white cursor-wait"
+                : "bg-transparent text-white hover:bg-teal-600 hover:text-white"
+              }`}
+            onClick={onRsyncCloud}
+            disabled={isRsyncing}
+            title="Rsync Cloud - Sinkronkan data dari cloud"
+          >
+            <FiCloudDownload className={`mr-1.5 ${isRsyncing ? "animate-pulse" : ""}`} size={14} />
+            {isRsyncing ? "Syncing..." : "Rsync Cloud"}
+          </button>
           <button
             className="h-8 px-3 flex items-center text-xs font-semibold bg-transparent text-white hover:bg-red-600 hover:text-white transition-all duration-150"
             onClick={() => {

@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { List } from "react-window";
 import { Plus, Search, Calendar, RotateCcw, Download, Eye, Edit, Trash2, ImageIcon } from "lucide-react";
 import { TambahPengeluaranModal } from "./TambahPengeluaranModal";
 import { usePengeluaranData, type DateRangeKey, type PengeluaranEvent } from "./usePengeluaranData";
@@ -22,13 +23,11 @@ export function PengeluaranPage() {
 
     const { events, totalPengeluaran } = usePengeluaranData(filters.dateRange);
 
-    const filteredRows = events.filter((e) => {
-        if (filters.search) {
-            const s = filters.search.toLowerCase();
-            if (!e.keterangan.toLowerCase().includes(s)) return false;
-        }
-        return true;
-    });
+    const filteredRows = useMemo(() => {
+        if (!filters.search) return events;
+        const s = filters.search.toLowerCase();
+        return events.filter((e) => e.keterangan.toLowerCase().includes(s));
+    }, [events, filters.search]);
 
     const handleRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
@@ -89,31 +88,82 @@ export function PengeluaranPage() {
                 </div>
 
                 {/* Table Section */}
-                <div className="flex-1 overflow-auto border-l border-slate-200 bg-white pb-4 pt-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-                    <div className="w-full">
-                        <table className="w-full table-fixed border-collapse text-left text-sm">
-                            <thead className="sticky top-0 z-10 bg-slate-100 shadow-[0_2px_4px_-1px_rgba(0,0,0,0.1)]">
-                                <tr>
-                                    <th className="w-[12%] border-r border-slate-200 bg-slate-100 py-3 font-semibold text-slate-900 text-center">Tanggal</th>
-                                    <th className="w-[10%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">ID</th>
-                                    <th className="w-[35%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Keterangan</th>
-                                    <th className="w-[15%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Jumlah</th>
-                                    <th className="w-[13%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Bukti</th>
-                                    <th className="w-[15%] border-r border-slate-200 bg-slate-100 pl-4 py-3 font-semibold text-slate-900 text-center">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredRows.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className="py-12 text-center text-slate-400">
-                                            Tidak ada data pengeluaran
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredRows.map((row) => <EventRow key={row.id} row={row} />)
-                                )}
-                            </tbody>
-                        </table>
+                <div className="flex-1 flex flex-col overflow-hidden border-l border-slate-200 bg-white">
+                    {/* Table Header - Fixed */}
+                    <table className="w-full table-fixed border-collapse text-left text-sm">
+                        <thead className="bg-slate-100 shadow-[0_2px_4px_-1px_rgba(0,0,0,0.1)]">
+                            <tr>
+                                <th className="w-[12%] border-r border-slate-200 bg-slate-100 py-3 font-semibold text-slate-900 text-center">Tanggal</th>
+                                <th className="w-[10%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">ID</th>
+                                <th className="w-[35%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Keterangan</th>
+                                <th className="w-[15%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Jumlah</th>
+                                <th className="w-[13%] border-r border-slate-200 bg-slate-100 px-2 py-3 font-semibold text-slate-900 text-center">Bukti</th>
+                                <th className="w-[15%] border-r border-slate-200 bg-slate-100 pl-4 py-3 font-semibold text-slate-900 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                    </table>
+
+                    {/* Virtualized Table Body - Scrollable */}
+                    <div className="flex-1 overflow-hidden">
+                        {filteredRows.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center gap-2 py-12 text-slate-500">
+                                <Search size={32} className="text-slate-300" />
+                                <p>Tidak ada data pengeluaran</p>
+                            </div>
+                        ) : (
+                            <List
+                                defaultHeight={600}
+                                rowCount={filteredRows.length}
+                                rowHeight={56}
+                                rowProps={{}}
+                                rowComponent={({ index, style }) => {
+                                    const row = filteredRows[index];
+                                    const date = new Date(row.tanggal);
+                                    return (
+                                        <div style={style} className="hover:bg-slate-50">
+                                            <div className="flex w-full border-b border-slate-100 text-sm">
+                                                {/* Tanggal */}
+                                                <div className="w-[12%] border-r border-slate-200 px-2 py-2 text-center">
+                                                    <span className="text-sm font-medium text-slate-900">
+                                                        {date.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+                                                    </span>
+                                                </div>
+                                                {/* ID */}
+                                                <div className="w-[10%] border-r border-slate-200 px-2 py-2 text-center">
+                                                    <span className="font-mono text-sm font-medium text-slate-900">#{row.id}</span>
+                                                </div>
+                                                {/* Keterangan */}
+                                                <div className="w-[35%] border-r border-slate-200 px-2 py-2">
+                                                    <div className="text-sm font-medium text-slate-900 truncate">{row.keterangan}</div>
+                                                </div>
+                                                {/* Jumlah */}
+                                                <div className="w-[15%] border-r border-slate-200 px-2 py-2 text-center">
+                                                    <span className="text-sm font-semibold text-red-600">{formatCurrency(row.jumlah)}</span>
+                                                </div>
+                                                {/* Bukti */}
+                                                <div className="w-[13%] border-r border-slate-200 px-2 py-2 text-center">
+                                                    {row.urlBuktiFoto ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                                                            <ImageIcon size={10} />Ada
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400">Tidak ada</span>
+                                                    )}
+                                                </div>
+                                                {/* Aksi */}
+                                                <div className="w-[15%] border-r border-slate-200 pl-4 py-2">
+                                                    <div className="flex items-center gap-1">
+                                                        <button className="p-1 hover:bg-blue-50 text-blue-600" title="Detail"><Eye size={14} /></button>
+                                                        <button className="p-1 hover:bg-amber-50 text-amber-600" title="Edit"><Edit size={14} /></button>
+                                                        <button className="p-1 hover:bg-red-50 text-red-600" title="Hapus"><Trash2 size={14} /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                }}
+                            />
+                        )}
                     </div>
                 </div>
             </div>
@@ -122,56 +172,5 @@ export function PengeluaranPage() {
                 <TambahPengeluaranModal onClose={() => setShowTambahModal(false)} onSave={handleRefresh} />
             )}
         </div>
-    );
-}
-
-function EventRow({ row }: { row: PengeluaranEvent }) {
-    const date = new Date(row.tanggal);
-
-    return (
-        <tr className="border-b border-slate-200 hover:bg-slate-50">
-            {/* Tanggal */}
-            <td className="w-[12%] border-r border-slate-200 px-2 py-3 text-center">
-                <span className="text-sm font-medium text-slate-900">
-                    {date.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "2-digit" })}
-                </span>
-            </td>
-            {/* ID */}
-            <td className="w-[10%] border-r border-slate-200 px-2 py-3 text-center">
-                <span className="font-mono text-sm font-medium text-slate-900">#{row.id}</span>
-            </td>
-            {/* Keterangan */}
-            <td className="w-[35%] border-r border-slate-200 px-2 py-3">
-                <div className="text-sm font-medium text-slate-900 truncate">{row.keterangan}</div>
-            </td>
-            {/* Jumlah */}
-            <td className="w-[15%] border-r border-slate-200 px-2 py-3 text-center">
-                <span className="text-sm font-semibold text-red-600">{formatCurrency(row.jumlah)}</span>
-            </td>
-            {/* Bukti */}
-            <td className="w-[13%] border-r border-slate-200 px-2 py-3 text-center">
-                {row.urlBuktiFoto ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                        <ImageIcon size={10} /> Ada
-                    </span>
-                ) : (
-                    <span className="text-xs text-slate-400">Tidak ada</span>
-                )}
-            </td>
-            {/* Aksi */}
-            <td className="w-[15%] border-r border-slate-200 pl-4 py-3">
-                <div className="flex items-center gap-1">
-                    <button className="p-1.5 hover:bg-blue-50 text-blue-600" title="Detail">
-                        <Eye size={16} />
-                    </button>
-                    <button className="p-1.5 hover:bg-amber-50 text-amber-600" title="Edit">
-                        <Edit size={16} />
-                    </button>
-                    <button className="p-1.5 hover:bg-red-50 text-red-600" title="Hapus">
-                        <Trash2 size={16} />
-                    </button>
-                </div>
-            </td>
-        </tr>
     );
 }

@@ -46,14 +46,16 @@ export function LoginPage() {
           {/* Login Card */}
           <div className="bg-white">
             {/* Form */}
-            <form className="space-y-5" onSubmit={onSubmit}>
+            <form className="space-y-5" onSubmit={onSubmit} autoComplete="off">
               {/* Email Field */}
               <div className="space-y-2">
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
                   spellCheck={false}
                   placeholder="Email"
                   className="w-full h-11 px-4 border-2 border-slate-200 bg-slate-50 text-slate-900 
@@ -70,7 +72,10 @@ export function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                     placeholder="Password"
                     className="w-full h-11 px-4 pr-11 border-2 border-slate-200 bg-slate-50 text-slate-900 
                              placeholder:text-slate-400 text-sm font-medium

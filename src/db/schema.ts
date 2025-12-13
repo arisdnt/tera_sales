@@ -78,15 +78,7 @@ export type KvRow = {
   updatedAt: number;
 };
 
-export type ActivityLogRow = {
-  id?: number;
-  entity: string;
-  action: OutboxOperation;
-  status: ActivityStatus;
-  reference?: string | number | null;
-  details?: string | null;
-  createdAt: number;
-};
+
 
 class AppDexie extends Dexie {
   sales!: Table<SalesRow, number>;
@@ -134,7 +126,7 @@ class AppDexie extends Dexie {
   outbox!: Table<OutboxItem, number>;
   id_map!: Table<IdMapRow, number>;
   kv!: Table<KvRow, number>;
-  activity_logs!: Table<ActivityLogRow, number>;
+
 
   constructor() {
     super("tera_sales");
@@ -184,9 +176,7 @@ class AppDexie extends Dexie {
       outbox: "++id, status, createdAt, [status+createdAt], table, op",
       id_map: "++id, [entity+localId], entity, remoteId, createdAt",
       kv: "++id, key, updatedAt",
-    });
-    this.version(2).stores({
-      activity_logs: "++id, entity, status, createdAt",
+
     });
   }
 }

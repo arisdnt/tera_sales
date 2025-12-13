@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X, Save, User, Phone } from "lucide-react";
-import { db } from "../../db/schema";
+import { updateWithSync } from "../../utils/syncOperations";
 
 type SalesData = {
     id: number;
@@ -31,11 +31,10 @@ export function SalesEditModal({ sales, onClose, onSave }: Props) {
 
         setSaving(true);
         try {
-            await db.sales.update(sales.id, {
+            await updateWithSync("sales", "id_sales", sales.id, {
                 nama_sales: namaSales.trim(),
                 nomor_telepon: nomorTelepon.trim() || null,
                 status_aktif: statusAktif,
-                diperbarui_pada: new Date().toISOString(),
             });
 
             onSave();

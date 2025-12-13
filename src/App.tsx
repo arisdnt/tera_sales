@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navbar } from "./components/layout/Navbar";
 import { SystemToolbar } from "./components/layout/SystemToolbar";
 import { createOutboxWorker } from "./services/outboxWorker";
-import { initActivityLogger } from "./services/activityLogger";
+import { forceResyncFromCloud } from "./services/cloudSync";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
 import { SalesPage } from "./features/sales/SalesPage";
 import { LoginPage } from "./features/auth/LoginPage";
@@ -32,7 +32,7 @@ const TAB_TO_PATH: Record<string, string> = {
   log: "/log",
 };
 
-initActivityLogger();
+
 
 function pathToTab(pathname: string): TabKey {
   const clean = pathname.replace(/\/+$/, "") || "/";
@@ -72,6 +72,18 @@ export function App() {
     return pathToTab(window.location.pathname);
   });
 
+  const [isRsyncing, setIsRsyncing] = useState(false);
+
+  const handleRsyncCloud = useCallback(async () => {
+    if (isRsyncing) return;
+    setIsRsyncing(true);
+    try {
+      await forceResyncFromCloud((msg) => console.log("[Rsync]", msg));
+    } finally {
+      setIsRsyncing(false);
+    }
+  }, [isRsyncing]);
+
   const setTab = useCallback((next: TabKey) => {
     setTabState(next);
   }, []);
@@ -100,6 +112,8 @@ export function App() {
           onChangeTab={setTab}
           showNav={isSignedIn}
           rightSlot={isSignedIn ? <AuthRight email={auth.user?.email ?? null} /> : null}
+          onRsyncCloud={handleRsyncCloud}
+          isRsyncing={isRsyncing}
         />
       )}
       <main className="flex-1 overflow-hidden">
