@@ -9,3 +9,5 @@ dist
 src-tauri/target
 src-tauri/gen
 
+# Windows metadata files (contains Zone information from downloads)
+*:Zone.Identifier
