@@ -1,9 +1,12 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { List } from "react-window";
 import { db } from "../../db/schema";
 import type { PengirimanDashboardRow } from "../../db/supabaseViewsExtras";
 import { dateRangeToWindow, type DateRangeKey } from "./dateRange";
+import { PengirimanDetailModal } from "./PengirimanDetailModal";
+import { PengirimanEditModal } from "./PengirimanEditModal";
+import { TambahPembayaranModal } from "./TambahPembayaranModal";
 import {
   Calendar,
   Download,
@@ -33,6 +36,24 @@ export function PembayaranPage() {
     kabupaten: "",
     kecamatan: "",
   });
+
+  // Modal state
+  const [detailModalRow, setDetailModalRow] = useState<PengirimanDashboardRow | null>(null);
+  const [editModalRow, setEditModalRow] = useState<PengirimanDashboardRow | null>(null);
+  const [showTambahModal, setShowTambahModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleOpenDetail = useCallback((row: PengirimanDashboardRow) => {
+    setDetailModalRow(row);
+  }, []);
+
+  const handleOpenEdit = useCallback((row: PengirimanDashboardRow) => {
+    setEditModalRow(row);
+  }, []);
+
+  const handleSaveEdit = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   const rows =
     useLiveQuery(
@@ -264,7 +285,10 @@ export function PembayaranPage() {
               <Download size={16} />
               <span className="whitespace-nowrap">Export</span>
             </button>
-            <button className="flex h-9 flex-1 items-center justify-center gap-2 bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 lg:flex-none">
+            <button
+              className="flex h-9 flex-1 items-center justify-center gap-2 bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 lg:flex-none"
+              onClick={() => setShowTambahModal(true)}
+            >
               <Plus size={16} />
               <span className="whitespace-nowrap">Pembayaran</span>
             </button>
@@ -366,12 +390,14 @@ export function PembayaranPage() {
                             <button
                               className="flex size-7 items-center justify-center rounded-sm border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:border-blue-300 transition-colors"
                               title="Detail"
+                              onClick={() => handleOpenDetail(row)}
                             >
                               <Eye size={14} />
                             </button>
                             <button
                               className="flex size-7 items-center justify-center rounded-sm border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 hover:border-amber-300 transition-colors"
                               title="Edit"
+                              onClick={() => handleOpenEdit(row)}
                             >
                               <Edit size={14} />
                             </button>
@@ -393,6 +419,31 @@ export function PembayaranPage() {
           </div>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      {detailModalRow && (
+        <PengirimanDetailModal
+          row={detailModalRow}
+          onClose={() => setDetailModalRow(null)}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {editModalRow && (
+        <PengirimanEditModal
+          row={editModalRow}
+          onClose={() => setEditModalRow(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
+
+      {/* Tambah Pembayaran Modal */}
+      {showTambahModal && (
+        <TambahPembayaranModal
+          onClose={() => setShowTambahModal(false)}
+          onSave={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 }

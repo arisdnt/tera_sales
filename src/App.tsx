@@ -2,10 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navbar } from "./components/layout/Navbar";
 import { SystemToolbar } from "./components/layout/SystemToolbar";
 import { createOutboxWorker } from "./services/outboxWorker";
+import { initActivityLogger } from "./services/activityLogger";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
 import { SalesPage } from "./features/sales/SalesPage";
 import { LoginPage } from "./features/auth/LoginPage";
 import { PembayaranPage } from "./features/payments/PembayaranPage";
+import { DashboardPage } from "./features/dashboard/DashboardPage";
+import { SetoranPage } from "./features/setoran/SetoranPage";
+import { PengeluaranPage } from "./features/pengeluaran/PengeluaranPage";
+import { PengirimanPage } from "./features/pengiriman/PengirimanPage";
+import { ProdukPage } from "./features/produk/ProdukPage";
+import { TokoPage } from "./features/toko/TokoPage";
+import { LogPage } from "./features/logs/LogPage";
 import { startAuthSync, signOut } from "./services/authService";
 import { useAuthState } from "./hooks/useAuthState";
 import { useDisableContextMenu } from "./hooks/useDisableContextMenu";
@@ -15,8 +23,16 @@ type TabKey = string;
 const TAB_TO_PATH: Record<string, string> = {
   dashboard: "/dashboard",
   pembayaran: "/pembayaran",
+  pengiriman: "/pengiriman",
+  produk: "/produk",
+  toko: "/toko",
+  setoran: "/setoran",
+  pengeluaran: "/pengeluaran",
   sales: "/sales",
+  log: "/log",
 };
+
+initActivityLogger();
 
 function pathToTab(pathname: string): TabKey {
   const clean = pathname.replace(/\/+$/, "") || "/";
@@ -92,10 +108,22 @@ export function App() {
         ) : isSignedIn ? (
           tab === "pembayaran" ? (
             <PembayaranPage />
+          ) : tab === "pengiriman" ? (
+            <PengirimanPage />
+          ) : tab === "produk" ? (
+            <ProdukPage />
+          ) : tab === "toko" ? (
+            <TokoPage />
+          ) : tab === "setoran" ? (
+            <SetoranPage />
+          ) : tab === "pengeluaran" ? (
+            <PengeluaranPage />
           ) : tab === "sales" ? (
             <SalesPage />
+          ) : tab === "log" ? (
+            <LogPage />
           ) : (
-            <Placeholder title={tab} />
+            <DashboardPage />
           )
         ) : (
           <LoginPage />

@@ -1,19 +1,21 @@
 import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
-import { 
-  LayoutDashboard as FiDashboard, 
-  CreditCard as FiCreditCard, 
-  Truck as FiTruck, 
-  DollarSign as FiDollarSign, 
-  Package as FiPackage, 
-  ShoppingCart as FiShoppingCart, 
-  Users as FiUsers, 
+import {
+  LayoutDashboard as FiDashboard,
+  CreditCard as FiCreditCard,
+  Truck as FiTruck,
+  DollarSign as FiDollarSign,
+  Package as FiPackage,
+  ShoppingCart as FiShoppingCart,
+  Users as FiUsers,
   LogOut as FiLogOut,
-  Minimize as FiMinimize,
-  Maximize as FiMaximize,
+  Minus as FiMinimize,
+  Square as FiMaximize,
   X as FiX,
-  ChevronDown as FiChevronDown
+  ChevronDown as FiChevronDown,
+  ListChecks as FiListChecks
 } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type Props = {
   title?: string;
@@ -101,6 +103,14 @@ export function Navbar({ title = "Tera Sales", tab, onChangeTab, rightSlot, show
               activeTab={tab}
               onSelect={handleMenuClick}
             />
+
+            <NavButton
+              active={tab === "log"}
+              onClick={() => handleMenuClick("log")}
+            >
+              <FiListChecks className="mr-1.5" size={14} />
+              Log
+            </NavButton>
           </nav>
         )}
 
@@ -118,45 +128,27 @@ export function Navbar({ title = "Tera Sales", tab, onChangeTab, rightSlot, show
             Logout
           </button>
           <div className="flex items-center gap-0.5" data-tauri-drag-region="false">
-          <button
-            className="w-8 h-7 flex items-center justify-center hover:bg-teal-600 transition-colors"
-            onClick={() => {
-              // @ts-ignore
-              if (window.__TAURI__) {
-                // @ts-ignore
-                window.__TAURI__.window.appWindow.minimize();
-              }
-            }}
-            title="Minimize"
-          >
-            <FiMinimize size={12} className="text-white" />
-          </button>
-          <button
-            className="w-8 h-7 flex items-center justify-center hover:bg-teal-600 transition-colors"
-            onClick={() => {
-              // @ts-ignore
-              if (window.__TAURI__) {
-                // @ts-ignore
-                window.__TAURI__.window.appWindow.toggleMaximize();
-              }
-            }}
-            title="Maximize"
-          >
-            <FiMaximize size={12} className="text-white" />
-          </button>
-          <button
-            className="w-8 h-7 flex items-center justify-center hover:bg-red-600 hover:text-white transition-colors"
-            onClick={() => {
-              // @ts-ignore
-              if (window.__TAURI__) {
-                // @ts-ignore
-                window.__TAURI__.window.appWindow.close();
-              }
-            }}
-            title="Close"
-          >
-            <FiX size={12} className="text-white" />
-          </button>
+            <button
+              className="w-8 h-7 flex items-center justify-center hover:bg-teal-600 transition-colors"
+              onClick={() => getCurrentWindow().minimize()}
+              title="Minimize"
+            >
+              <FiMinimize size={12} className="text-white" />
+            </button>
+            <button
+              className="w-8 h-7 flex items-center justify-center hover:bg-teal-600 transition-colors"
+              onClick={() => getCurrentWindow().toggleMaximize()}
+              title="Maximize"
+            >
+              <FiMaximize size={12} className="text-white" />
+            </button>
+            <button
+              className="w-8 h-7 flex items-center justify-center hover:bg-red-600 hover:text-white transition-colors"
+              onClick={() => getCurrentWindow().close()}
+              title="Close"
+            >
+              <FiX size={12} className="text-white" />
+            </button>
           </div>
         </div>
       </div>
