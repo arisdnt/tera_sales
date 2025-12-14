@@ -5,6 +5,7 @@ import { SalesDetailModal } from "./SalesDetailModal";
 import { SalesEditModal } from "./SalesEditModal";
 import { TambahSalesModal } from "./TambahSalesModal";
 import { ConfirmDeleteModal } from "../../components/ConfirmDeleteModal";
+import { ValidationModal } from "../../components/ValidationModal";
 import { deleteWithSync } from "../../utils/syncOperations";
 
 const formatCurrency = (value: number) =>
@@ -22,6 +23,7 @@ export function SalesPage() {
   const [detailSales, setDetailSales] = useState<SalesEvent | null>(null);
   const [editSales, setEditSales] = useState<SalesEvent | null>(null);
   const [deleteSales, setDeleteSales] = useState<SalesEvent | null>(null);
+  const [validationError, setValidationError] = useState<{ title: string; message: string; details: string[]; suggestion: string } | null>(null);
 
   const { events } = useSalesData(filters.statusAktif, filters.teleponExists);
 
@@ -32,6 +34,22 @@ export function SalesPage() {
     }
     return true;
   });
+
+  // Handler untuk validasi sebelum menampilkan modal delete
+  const handleDeleteClick = (sales: SalesEvent) => {
+    // Validasi: Block delete jika sales masih memiliki toko terkait
+    if (sales.totalStores > 0) {
+      setValidationError({
+        title: "Tidak Dapat Menghapus",
+        message: `Sales "${sales.namaSales}" masih memiliki toko terkait.`,
+        details: [`Jumlah toko: ${sales.totalStores}`],
+        suggestion: "Pindahkan atau hapus semua toko terlebih dahulu sebelum menghapus sales ini.",
+      });
+      return;
+    }
+    // Jika validasi lolos, tampilkan modal confirm dengan captcha
+    setDeleteSales(sales);
+  };
 
   const handleConfirmDelete = async () => {
     if (!deleteSales) return;
@@ -138,7 +156,7 @@ export function SalesPage() {
                       row={row}
                       onDetail={() => setDetailSales(row)}
                       onEdit={() => setEditSales(row)}
-                      onDelete={() => setDeleteSales(row)}
+                      onDelete={() => handleDeleteClick(row)}
                     />
                   ))
                 )}
@@ -177,6 +195,16 @@ export function SalesPage() {
           itemName={deleteSales.namaSales}
           onConfirm={handleConfirmDelete}
           onCancel={() => setDeleteSales(null)}
+        />
+      )}
+      {validationError && (
+        <ValidationModal
+          type="warning"
+          title={validationError.title}
+          message={validationError.message}
+          details={validationError.details}
+          suggestion={validationError.suggestion}
+          onClose={() => setValidationError(null)}
         />
       )}
     </div>

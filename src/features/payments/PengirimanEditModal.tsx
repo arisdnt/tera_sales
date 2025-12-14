@@ -87,10 +87,9 @@ export function PengirimanEditModal({ row, onClose, onSave }: Props) {
         setSaving(true);
         try {
             // Update pengiriman
-            await db.pengiriman.update(row.id_pengiriman, {
+            await updateWithSync("pengiriman", "id_pengiriman", row.id_pengiriman, {
                 tanggal_kirim: tanggalKirim,
                 id_toko: selectedTokoId,
-                diperbarui_pada: new Date().toISOString(),
             });
 
             // Get existing details
@@ -116,10 +115,7 @@ export function PengirimanEditModal({ row, onClose, onSave }: Props) {
                     });
                 } else {
                     // Add new
-                    const maxId = await db.detail_pengiriman.orderBy("id_detail_kirim").last();
-                    const newId = (maxId?.id_detail_kirim ?? 0) + 1;
                     await insertWithSync("detail_pengiriman", "id_detail_kirim", {
-                        id_detail_kirim: newId,
                         id_pengiriman: row.id_pengiriman,
                         id_produk: detail.id_produk,
                         jumlah_kirim: detail.jumlah_kirim,

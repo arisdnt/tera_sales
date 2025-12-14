@@ -1,0 +1,155 @@
+name: Supabase Keepalive Ping
+
+# ============================================================================
+# TUJUAN: Mencegah database Supabase Free Tier dinonaktifkan
+# ============================================================================
+# 
+# Supabase Free Tier akan mem-pause database jika:
+# - Tidak ada aktivitas selama 1 MINGGU (7 hari)
+# - Tidak ada request API sama sekali
+#
+# Workflow ini akan:
+# - Ping database 1x per hari
+# - Menjalankan query sederhana untuk menjaga database tetap aktif
+#
+# GITHUB SECRETS yang diperlukan:
+# -------------------------------------------------------------------------
+# | Secret Name        | Cara Mendapatkan                                 |
+# |--------------------|--------------------------------------------------|
+# | SUPABASE_URL       | Dashboard > Settings > API > Project URL         |
+# | SUPABASE_ANON_KEY  | Dashboard > Settings > API > anon/public key     |
+# -------------------------------------------------------------------------
+#
+# ============================================================================
+
+on:
+  schedule:
+    # Ping setiap hari jam 00:00 UTC (07:00 WIB)
+    - cron: "0 0 * * *"
+  workflow_dispatch: {} # Memungkinkan trigger manual untuk testing
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Validate secrets
+        run: |
+          echo "🔍 Validating required secrets..."
+          
+          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
+            echo "❌ ERROR: SUPABASE_URL secret is not set"
+            echo ""
+            echo "How to fix:"
+            echo "1. Go to Supabase Dashboard > Settings > API"
+            echo "2. Copy 'Project URL'"
+            echo "3. Add as GitHub Secret: Settings > Secrets > Actions > New repository secret"
+            echo "   Name: SUPABASE_URL"
+            echo "   Value: https://xxxxx.supabase.co"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then
+            echo "❌ ERROR: SUPABASE_ANON_KEY secret is not set"
+            echo ""
+            echo "How to fix:"
+            echo "1. Go to Supabase Dashboard > Settings > API"
+            echo "2. Copy 'anon public' key"
+            echo "3. Add as GitHub Secret: Settings > Secrets > Actions > New repository secret"
+            echo "   Name: SUPABASE_ANON_KEY"
+            echo "   Value: eyJhbGciOiJIUzI1NiIs..."
+            exit 1
+          fi
+          
+          echo "✅ All secrets are configured"
+
+      - name: Ping Supabase Database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          echo "🏓 Pinging Supabase database to keep it alive..."
+          echo "📅 Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "🌐 Target: ${SUPABASE_URL}"
+          echo ""
+          
+          # =================================================================
+          # Method: Health Check via REST API Root
+          # Ini TIDAK memerlukan tabel apapun - hanya ping ke API
+          # =================================================================
+          echo "📡 Sending keepalive request (API health check)..."
+          
+          RESPONSE=$(curl -sS -w "\n%{http_code}" \
+            -X GET "${SUPABASE_URL}/rest/v1/" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          
+          # Extract HTTP code from response
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo ""
+          echo "📊 Response:"
+          echo "   HTTP Status: ${HTTP_CODE}"
+          
+          # Any response (even error) means database is reachable
+          # HTTP 2xx = Success
+          # HTTP 4xx = Auth/permission issue but database IS ALIVE
+          # HTTP 5xx = Server issue but request REACHED Supabase
+          
+          if [[ "$HTTP_CODE" =~ ^2 ]]; then
+            echo ""
+            echo "================================================"
+            echo "✅ KEEPALIVE SUCCESSFUL"
+            echo "================================================"
+            echo "Database is active and responding"
+            echo "HTTP Status: ${HTTP_CODE} (Success)"
+            echo "Next ping scheduled: tomorrow at 00:00 UTC"
+            echo "================================================"
+          elif [[ "$HTTP_CODE" =~ ^4 ]]; then
+            echo ""
+            echo "================================================"
+            echo "✅ KEEPALIVE SUCCESSFUL (with auth notice)"
+            echo "================================================"
+            echo "Request reached Supabase = Database is ACTIVE"
+            echo "HTTP Status: ${HTTP_CODE}"
+            echo "Note: 4xx means auth/permission issue, but"
+            echo "      database is alive and won't be paused!"
+            echo "================================================"
+          else
+            echo ""
+            echo "================================================"
+            echo "⚠️  UNEXPECTED RESPONSE"
+            echo "================================================"
+            echo "HTTP Code: ${HTTP_CODE}"
+            echo "Response: ${BODY}"
+            echo ""
+            echo "This might indicate:"
+            echo "- Database is paused (resume from dashboard)"
+            echo "- Network issue"
+            echo "- Supabase outage"
+            echo "================================================"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo ""
+          echo "================================================"
+          echo "📋 KEEPALIVE SUMMARY"
+          echo "================================================"
+          echo "Workflow: Supabase Keepalive Ping"
+          echo "Run Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "Purpose: Prevent Supabase free tier database pause"
+          echo ""
+          echo "ℹ️  How it works:"
+          echo "   - Sends a simple API request to Supabase"
+          echo "   - Does NOT require any specific table"
+          echo "   - Does NOT modify any data (READ-ONLY)"
+          echo "   - Any response = database stays active"
+          echo ""
+          echo "ℹ️  Supabase Free Tier Info:"
+          echo "   - Database pauses after 1 week of inactivity"
+          echo "   - This workflow pings daily to prevent that"
+          echo "   - If paused, resume from: Dashboard > Database"
+          echo "================================================"

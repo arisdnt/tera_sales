@@ -56,6 +56,16 @@ export type OutboxItem = {
   pkValue?: number | string;
   localPk?: number | string;
   payload: Record<string, unknown>;
+  /**
+   * Ack dari remote (Supabase) untuk mencegah re-send berulang bila side-effect lokal gagal/terputus.
+   * Tidak mempengaruhi schema Supabase (hanya tersimpan di IndexedDB/Dexie).
+   */
+  remoteAck?: unknown;
+  /**
+   * Timestamp (ms) kapan item boleh dicoba lagi. Dipakai untuk menghindari "tight loop"
+   * pada kasus dependency (FK map belum ada) atau error jaringan sementara.
+   */
+  nextAttemptAt?: number;
   status: OutboxStatus;
   attempts: number;
   lastError?: string;

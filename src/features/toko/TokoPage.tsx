@@ -6,6 +6,7 @@ import { TambahTokoModal } from "./TambahTokoModal";
 import { TokoDetailModal } from "./TokoDetailModal";
 import { TokoEditModal } from "./TokoEditModal";
 import { ConfirmDeleteModal } from "../../components/ConfirmDeleteModal";
+import { ValidationModal } from "../../components/ValidationModal";
 import { deleteWithSync } from "../../utils/syncOperations";
 
 const formatCurrency = (value: number) =>
@@ -25,6 +26,7 @@ export function TokoPage() {
     const [detailToko, setDetailToko] = useState<TokoEvent | null>(null);
     const [editToko, setEditToko] = useState<TokoEvent | null>(null);
     const [deleteToko, setDeleteToko] = useState<TokoEvent | null>(null);
+    const [validationError, setValidationError] = useState<{ title: string; message: string; details: string[]; suggestion: string } | null>(null);
 
     const { events, salesOptions, kabupatenOptions, kecamatanOptions } = useTokoData(
         filters.statusToko, filters.sales, filters.kabupaten, filters.kecamatan
@@ -44,7 +46,25 @@ export function TokoPage() {
 
     const handleDetail = useCallback((row: TokoEvent) => setDetailToko(row), []);
     const handleEdit = useCallback((row: TokoEvent) => setEditToko(row), []);
-    const handleDelete = useCallback((row: TokoEvent) => setDeleteToko(row), []);
+
+    // Handler untuk validasi sebelum menampilkan modal delete
+    const handleDelete = useCallback((toko: TokoEvent) => {
+        // Validasi: Block delete jika toko memiliki riwayat transaksi
+        if (toko.quantityShipped > 0 || toko.quantitySold > 0) {
+            setValidationError({
+                title: "Tidak Dapat Menghapus",
+                message: `Toko "${toko.namaToko}" sudah memiliki riwayat transaksi.`,
+                details: [
+                    `Total dikirim: ${toko.quantityShipped}`,
+                    `Total terjual: ${toko.quantitySold}`,
+                ],
+                suggestion: "Non-aktifkan toko ini sebagai alternatif jika tidak ingin digunakan lagi.",
+            });
+            return;
+        }
+        // Jika validasi lolos, tampilkan modal confirm dengan captcha
+        setDeleteToko(toko);
+    }, []);
 
     const handleConfirmDelete = async () => {
         if (!deleteToko) return;
@@ -308,6 +328,16 @@ export function TokoPage() {
                     itemName={deleteToko.namaToko}
                     onConfirm={handleConfirmDelete}
                     onCancel={() => setDeleteToko(null)}
+                />
+            )}
+            {validationError && (
+                <ValidationModal
+                    type="warning"
+                    title={validationError.title}
+                    message={validationError.message}
+                    details={validationError.details}
+                    suggestion={validationError.suggestion}
+                    onClose={() => setValidationError(null)}
                 />
             )}
         </div>

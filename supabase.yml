@@ -1,0 +1,388 @@
+name: Supabase Database Backup
+
+# ============================================================================
+# CONFIGURATION GUIDE - Bagian yang perlu diubah untuk database/server lain
+# ============================================================================
+# 
+# 1. GitHub Secrets yang WAJIB dibuat di Settings > Secrets and Variables > Actions:
+#    -------------------------------------------------------------------------
+#    | Secret Name         | Contoh Value                                     |
+#    |---------------------|--------------------------------------------------|
+#    | DB_HOST             | aws-1-ap-southeast-1.pooler.supabase.com         |
+#    | DB_PORT             | 6543                                             |
+#    | DB_NAME             | postgres                                         |
+#    | DB_USER             | postgres.hiryqjoyjsgijbaevvzq                    |
+#    | DB_PASSWORD         | password_database_anda                           |
+#    -------------------------------------------------------------------------
+#
+# 2. Cara mendapatkan kredensial Supabase:
+#    - Buka Supabase Dashboard > Project Settings > Database
+#    - Gunakan "Connection string" > "Transaction Pooler" untuk IPv4
+#    - DB_HOST: host dari connection string
+#    - DB_PORT: 6543 (pooler) atau 5432 (direct)
+#    - DB_USER: format "postgres.[project-ref]"
+#    - DB_PASSWORD: password database Anda
+#
+# 3. Untuk database PostgreSQL lain (non-Supabase):
+#    - DB_HOST: hostname/IP server database
+#    - DB_PORT: biasanya 5432
+#    - DB_NAME: nama database
+#    - DB_USER: username database
+#    - DB_PASSWORD: password database
+#
+# ============================================================================
+
+on:
+  schedule:
+    # Backup setiap hari jam 00:00 UTC (07:00 WIB)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Memungkinkan trigger manual
+
+# Environment variables dari GitHub Secrets
+env:
+  DB_HOST: ${{ secrets.DB_HOST }}
+  DB_PORT: ${{ secrets.DB_PORT }}
+  DB_NAME: ${{ secrets.DB_NAME }}
+  DB_USER: ${{ secrets.DB_USER }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          echo "Validating required secrets..."
+          MISSING=""
+          
+          if [ -z "${{ secrets.DB_HOST }}" ]; then
+            MISSING="${MISSING}DB_HOST, "
+          fi
+          if [ -z "${{ secrets.DB_PORT }}" ]; then
+            MISSING="${MISSING}DB_PORT, "
+          fi
+          if [ -z "${{ secrets.DB_NAME }}" ]; then
+            MISSING="${MISSING}DB_NAME, "
+          fi
+          if [ -z "${{ secrets.DB_USER }}" ]; then
+            MISSING="${MISSING}DB_USER, "
+          fi
+          if [ -z "${{ secrets.DB_PASSWORD }}" ]; then
+            MISSING="${MISSING}DB_PASSWORD, "
+          fi
+          
+          if [ -n "$MISSING" ]; then
+            echo "❌ ERROR: Missing required secrets: ${MISSING%,*}"
+            echo ""
+            echo "Please add the following secrets in:"
+            echo "GitHub Repository > Settings > Secrets and Variables > Actions"
+            echo ""
+            echo "Required secrets:"
+            echo "  - DB_HOST     : Database hostname"
+            echo "  - DB_PORT     : Database port (5432 or 6543)"
+            echo "  - DB_NAME     : Database name"
+            echo "  - DB_USER     : Database username"
+            echo "  - DB_PASSWORD : Database password"
+            exit 1
+          fi
+          
+          echo "✅ All required secrets are configured"
+          echo "   Host: ${{ secrets.DB_HOST }}"
+          echo "   Port: ${{ secrets.DB_PORT }}"
+          echo "   Database: ${{ secrets.DB_NAME }}"
+          echo "   User: ${{ secrets.DB_USER }}"
+
+      - name: Install PostgreSQL 17 Client
+        run: |
+          # Add PostgreSQL repository
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          
+          # Update and install PostgreSQL 17 client
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          
+          # Verify version
+          echo "PostgreSQL Client Version:"
+          pg_dump --version
+          psql --version
+
+      - name: Create backup directory structure
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          BACKUP_DIR="backups/${TIMESTAMP}"
+          mkdir -p "${BACKUP_DIR}"
+          echo "BACKUP_DIR=${BACKUP_DIR}" >> $GITHUB_ENV
+          echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
+          echo "✅ Backup directory created: ${BACKUP_DIR}"
+
+      - name: Create .pgpass file for authentication
+        run: |
+          echo "${DB_HOST}:${DB_PORT}:${DB_NAME}:${DB_USER}:${DB_PASSWORD}" > ~/.pgpass
+          echo "${DB_HOST}:${DB_PORT}:*:${DB_USER}:${DB_PASSWORD}" >> ~/.pgpass
+          chmod 600 ~/.pgpass
+          echo "✅ Authentication file created"
+
+      - name: Test Database Connection
+        run: |
+          echo "Testing database connection..."
+          echo "Host: ${DB_HOST}"
+          echo "Port: ${DB_PORT}"
+          echo "Database: ${DB_NAME}"
+          echo "User: ${DB_USER}"
+          echo ""
+          
+          psql -h "${DB_HOST}" \
+               -p "${DB_PORT}" \
+               -U "${DB_USER}" \
+               -d "${DB_NAME}" \
+               -c "SELECT current_database(), current_user, version();"
+          
+          echo "✅ Database connection successful"
+
+      - name: Backup Roles (Global Objects)
+        run: |
+          echo "Backing up roles and global objects..."
+          pg_dumpall \
+            -h "${DB_HOST}" \
+            -p "${DB_PORT}" \
+            -U "${DB_USER}" \
+            --roles-only \
+            --no-password \
+            -f "${BACKUP_DIR}/roles.sql" \
+            --verbose 2>&1 || true
+          
+          if [ -f "${BACKUP_DIR}/roles.sql" ] && [ -s "${BACKUP_DIR}/roles.sql" ]; then
+            echo "✅ Roles backup completed"
+            ls -lh "${BACKUP_DIR}/roles.sql"
+          else
+            echo "⚠️  Roles backup is empty or failed (may require superuser privileges)"
+          fi
+
+      - name: Backup Schema Only (Structure)
+        run: |
+          echo "Backing up database schema (structure only)..."
+          pg_dump \
+            -h "${DB_HOST}" \
+            -p "${DB_PORT}" \
+            -U "${DB_USER}" \
+            -d "${DB_NAME}" \
+            --schema-only \
+            --no-owner \
+            --no-privileges \
+            -f "${BACKUP_DIR}/schema.sql" \
+            --no-password \
+            --verbose
+          
+          if [ -f "${BACKUP_DIR}/schema.sql" ] && [ -s "${BACKUP_DIR}/schema.sql" ]; then
+            SIZE=$(du -h "${BACKUP_DIR}/schema.sql" | cut -f1)
+            echo "✅ Schema backup completed (${SIZE})"
+            ls -lh "${BACKUP_DIR}/schema.sql"
+          else
+            echo "❌ Schema backup failed"
+            exit 1
+          fi
+
+      - name: Backup Data Only
+        run: |
+          echo "Backing up database data only..."
+          pg_dump \
+            -h "${DB_HOST}" \
+            -p "${DB_PORT}" \
+            -U "${DB_USER}" \
+            -d "${DB_NAME}" \
+            --data-only \
+            --no-owner \
+            --no-privileges \
+            -f "${BACKUP_DIR}/data.sql" \
+            --no-password \
+            --verbose
+          
+          if [ -f "${BACKUP_DIR}/data.sql" ] && [ -s "${BACKUP_DIR}/data.sql" ]; then
+            SIZE=$(du -h "${BACKUP_DIR}/data.sql" | cut -f1)
+            echo "✅ Data backup completed (${SIZE})"
+            ls -lh "${BACKUP_DIR}/data.sql"
+          else
+            echo "❌ Data backup failed"
+            exit 1
+          fi
+
+      - name: Backup Complete Database (Full)
+        run: |
+          echo "Backing up complete database (schema + data)..."
+          pg_dump \
+            -h "${DB_HOST}" \
+            -p "${DB_PORT}" \
+            -U "${DB_USER}" \
+            -d "${DB_NAME}" \
+            --no-owner \
+            --no-privileges \
+            -f "${BACKUP_DIR}/full_backup.sql" \
+            --no-password \
+            --verbose
+          
+          if [ -f "${BACKUP_DIR}/full_backup.sql" ] && [ -s "${BACKUP_DIR}/full_backup.sql" ]; then
+            SIZE=$(du -h "${BACKUP_DIR}/full_backup.sql" | cut -f1)
+            echo "✅ Full backup completed (${SIZE})"
+            ls -lh "${BACKUP_DIR}/full_backup.sql"
+          else
+            echo "❌ Full backup failed"
+            exit 1
+          fi
+
+      - name: Create backup metadata
+        run: |
+          cat > "${BACKUP_DIR}/backup_info.txt" << EOF
+          Database Backup Information
+          =====================================
+          Backup Date: $(date)
+          Timestamp: ${TIMESTAMP}
+          
+          Connection Details:
+          -------------------
+          Host: ${DB_HOST}
+          Port: ${DB_PORT}
+          Database: ${DB_NAME}
+          User: ${DB_USER}
+          
+          Backup Files:
+          -------------
+          1. roles.sql        - Database roles and permissions
+          2. schema.sql       - Database structure only (tables, indexes, functions)
+          3. data.sql         - Data only (INSERT statements)
+          4. full_backup.sql  - Complete backup (schema + data)
+          
+          Restore Instructions:
+          ---------------------
+          # Restore roles (run as superuser):
+          psql -h <host> -p <port> -U <superuser> -f roles.sql
+          
+          # Restore schema only:
+          psql -h <host> -p <port> -U <user> -d <database> -f schema.sql
+          
+          # Restore data only:
+          psql -h <host> -p <port> -U <user> -d <database> -f data.sql
+          
+          # Restore full backup:
+          psql -h <host> -p <port> -U <user> -d <database> -f full_backup.sql
+          
+          Notes:
+          ------
+          - Schema and data files use --no-owner and --no-privileges
+          - Full backup includes complete database structure and data
+          - Roles backup requires superuser privileges to restore
+          EOF
+          
+          echo "✅ Backup metadata created"
+          cat "${BACKUP_DIR}/backup_info.txt"
+
+      - name: Generate file checksums
+        run: |
+          cd "${BACKUP_DIR}"
+          sha256sum *.sql > checksums.txt
+          echo "✅ Checksums generated:"
+          cat checksums.txt
+
+      - name: Compress backup files
+        run: |
+          echo "Compressing backup files..."
+          cd backups
+          tar -czf "backup_${TIMESTAMP}.tar.gz" "${TIMESTAMP}/"
+          
+          COMPRESSED_SIZE=$(du -h "backup_${TIMESTAMP}.tar.gz" | cut -f1)
+          echo "✅ Backup compressed: backup_${TIMESTAMP}.tar.gz (${COMPRESSED_SIZE})"
+          echo "BACKUP_ARCHIVE=backups/backup_${TIMESTAMP}.tar.gz" >> $GITHUB_ENV
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup-${{ env.TIMESTAMP }}
+          path: ${{ env.BACKUP_ARCHIVE }}
+          retention-days: 30
+
+      - name: Backup Summary
+        run: |
+          echo ""
+          echo "================================================"
+          echo "✅ BACKUP COMPLETED SUCCESSFULLY"
+          echo "================================================"
+          echo "Timestamp: $(date)"
+          echo "Backup Directory: ${BACKUP_DIR}"
+          echo "Database: ${DB_NAME}@${DB_HOST}:${DB_PORT}"
+          echo ""
+          echo "Backup Files:"
+          ls -lh "${BACKUP_DIR}/"
+          echo ""
+          echo "Compressed Archive:"
+          ls -lh "${BACKUP_ARCHIVE}"
+          echo ""
+          echo "Total Size:"
+          du -sh "${BACKUP_DIR}"
+          echo "================================================"
+
+      - name: Cleanup old backups (keep last 7 days)
+        if: always()
+        run: |
+          if [ -d "backups" ]; then
+            cd backups
+            
+            # Count backup directories
+            COUNT=$(find . -maxdepth 1 -type d -name "202*" 2>/dev/null | wc -l)
+            echo "Found ${COUNT} backup directories"
+            
+            # Remove directories older than 7 days
+            if [ "$COUNT" -gt 7 ]; then
+              echo "Cleaning up old backups (keeping last 7)..."
+              find . -maxdepth 1 -type d -name "202*" | sort | head -n -7 | xargs -r rm -rf
+              echo "✅ Old backup directories cleaned"
+            fi
+            
+            # Remove old tar.gz files
+            COUNT_TAR=$(ls -1 backup_*.tar.gz 2>/dev/null | wc -l)
+            if [ "$COUNT_TAR" -gt 7 ]; then
+              echo "Cleaning up old compressed backups..."
+              ls -t backup_*.tar.gz | tail -n +8 | xargs -r rm -f
+              echo "✅ Old compressed backups cleaned"
+            fi
+          fi
+
+      - name: Cleanup sensitive files
+        if: always()
+        run: |
+          rm -f ~/.pgpass
+          echo "✅ Sensitive files cleaned up"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo ""
+          echo "================================================"
+          echo "❌ BACKUP FAILED"
+          echo "================================================"
+          echo "Database: ${DB_NAME}@${DB_HOST}:${DB_PORT}"
+          echo ""
+          echo "Please check the logs above for error details"
+          echo ""
+          echo "Common issues:"
+          echo "1. Wrong credentials in GitHub Secrets"
+          echo "2. Network connectivity issues"
+          echo "3. Database permissions"
+          echo "4. Insufficient disk space"
+          echo "5. Firewall blocking connection"
+          echo ""
+          echo "Required GitHub Secrets:"
+          echo "  - DB_HOST     : Database hostname"
+          echo "  - DB_PORT     : Database port"
+          echo "  - DB_NAME     : Database name"
+          echo "  - DB_USER     : Database username"
+          echo "  - DB_PASSWORD : Database password"
+          echo ""
+          echo "Troubleshooting:"
+          echo "- Verify all secrets in Settings > Secrets and Variables > Actions"
+          echo "- Test connection manually: psql -h <host> -p <port> -U <user> -d <db>"
+          echo "- Check database server status"
+          echo "================================================"

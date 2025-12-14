@@ -2,6 +2,13 @@ import { useState, useCallback, useMemo } from "react";
 import { List } from "react-window";
 import { Plus, Search, Calendar, RotateCcw, Download, Eye, Edit, Trash2, Users, MapPin, ExternalLink, Package } from "lucide-react";
 import { usePengirimanData, type DateRangeKey, type PengirimanEvent } from "./usePengirimanData";
+import { TambahPengirimanModal } from "./TambahPengirimanModal";
+import { PengirimanDetailModal } from "../payments/PengirimanDetailModal";
+import { PengirimanEditModal } from "../payments/PengirimanEditModal";
+import { SimpleConfirmDeleteModal } from "../../components/SimpleConfirmDeleteModal";
+import { deleteWithSync } from "../../utils/syncOperations";
+import { db } from "../../db/schema";
+import type { PengirimanDashboardRow } from "../../db/supabaseViewsExtras";
 
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
     { key: "all", label: "Semua Waktu" },
@@ -21,6 +28,13 @@ export function PengirimanPage() {
         kecamatan: "",
     });
 
+    // Modal states
+    const [showTambahModal, setShowTambahModal] = useState(false);
+    const [detailRow, setDetailRow] = useState<PengirimanDashboardRow | null>(null);
+    const [editRow, setEditRow] = useState<PengirimanDashboardRow | null>(null);
+    const [deleteRow, setDeleteRow] = useState<PengirimanEvent | null>(null);
+    const [refreshKey, setRefreshKey] = useState(0);
+
     const { events, totalQty, salesOptions, kabupatenOptions, kecamatanOptions } = usePengirimanData(
         filters.dateRange, filters.sales, filters.kabupaten, filters.kecamatan
     );
@@ -35,6 +49,56 @@ export function PengirimanPage() {
             e.kabupaten.toLowerCase().includes(s)
         );
     }, [events, filters.search]);
+
+    const handleRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+    // Convert PengirimanEvent to PengirimanDashboardRow for modals
+    const eventToDashboardRow = useCallback((event: PengirimanEvent): PengirimanDashboardRow => ({
+        id_pengiriman: event.id,
+        tanggal_kirim: event.tanggalKirim,
+        nama_toko: event.namaToko,
+        nama_sales: event.namaSales,
+        kabupaten: event.kabupaten,
+        kecamatan: event.kecamatan,
+        total_quantity: event.totalQty,
+        detail_pengiriman: event.detailPengiriman,
+        is_autorestock: event.isAutorestock,
+        link_gmaps: event.linkGmaps,
+        id_toko: null,
+        nomor_telepon_toko: null,
+        nomor_telepon_sales: null,
+    }), []);
+
+    // Handlers
+    const handleDetail = useCallback((row: PengirimanEvent) => {
+        setDetailRow(eventToDashboardRow(row));
+    }, [eventToDashboardRow]);
+
+    const handleEdit = useCallback((row: PengirimanEvent) => {
+        setEditRow(eventToDashboardRow(row));
+    }, [eventToDashboardRow]);
+
+    const handleDeleteClick = useCallback((row: PengirimanEvent) => {
+        setDeleteRow(row);
+    }, []);
+
+    const handleConfirmDelete = async () => {
+        if (!deleteRow) return;
+
+        // Delete all detail_pengiriman first
+        const details = await db.detail_pengiriman
+            .where("id_pengiriman")
+            .equals(deleteRow.id)
+            .toArray();
+
+        for (const detail of details) {
+            await deleteWithSync("detail_pengiriman", "id_detail_kirim", detail.id_detail_kirim);
+        }
+
+        // Then delete the pengiriman
+        await deleteWithSync("pengiriman", "id_pengiriman", deleteRow.id);
+        setDeleteRow(null);
+    };
 
     return (
         <div className="flex h-full w-full flex-col bg-white">
@@ -121,7 +185,10 @@ export function PengirimanPage() {
                             <Download size={16} />
                             <span className="whitespace-nowrap">Export</span>
                         </button>
-                        <button className="flex h-9 flex-1 items-center justify-center gap-2 bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 lg:flex-none">
+                        <button
+                            className="flex h-9 flex-1 items-center justify-center gap-2 bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 lg:flex-none"
+                            onClick={() => setShowTambahModal(true)}
+                        >
                             <Plus size={16} />
                             <span className="whitespace-nowrap">Pengiriman</span>
                         </button>
@@ -207,9 +274,27 @@ export function PengirimanPage() {
                                                 {/* Aksi */}
                                                 <div className="w-[12%] border-r border-slate-200 pl-4 py-2">
                                                     <div className="flex items-center gap-1">
-                                                        <button className="p-1 hover:bg-blue-50 text-blue-600" title="Detail"><Eye size={14} /></button>
-                                                        <button className="p-1 hover:bg-amber-50 text-amber-600" title="Edit"><Edit size={14} /></button>
-                                                        <button className="p-1 hover:bg-red-50 text-red-600" title="Hapus"><Trash2 size={14} /></button>
+                                                        <button
+                                                            className="p-1 hover:bg-blue-50 text-blue-600"
+                                                            title="Detail"
+                                                            onClick={() => handleDetail(row)}
+                                                        >
+                                                            <Eye size={14} />
+                                                        </button>
+                                                        <button
+                                                            className="p-1 hover:bg-amber-50 text-amber-600"
+                                                            title="Edit"
+                                                            onClick={() => handleEdit(row)}
+                                                        >
+                                                            <Edit size={14} />
+                                                        </button>
+                                                        <button
+                                                            className="p-1 hover:bg-red-50 text-red-600"
+                                                            title="Hapus"
+                                                            onClick={() => handleDeleteClick(row)}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -221,6 +306,36 @@ export function PengirimanPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Modals */}
+            {showTambahModal && (
+                <TambahPengirimanModal
+                    onClose={() => setShowTambahModal(false)}
+                    onSave={handleRefresh}
+                />
+            )}
+            {detailRow && (
+                <PengirimanDetailModal
+                    row={detailRow}
+                    onClose={() => setDetailRow(null)}
+                />
+            )}
+            {editRow && (
+                <PengirimanEditModal
+                    row={editRow}
+                    onClose={() => setEditRow(null)}
+                    onSave={handleRefresh}
+                />
+            )}
+            {deleteRow && (
+                <SimpleConfirmDeleteModal
+                    title="Hapus Pengiriman"
+                    message="Anda yakin ingin menghapus pengiriman ini? Semua detail barang terkait juga akan dihapus."
+                    itemName={`#${deleteRow.id} - ${deleteRow.namaToko}`}
+                    onConfirm={handleConfirmDelete}
+                    onCancel={() => setDeleteRow(null)}
+                />
+            )}
         </div>
     );
 }

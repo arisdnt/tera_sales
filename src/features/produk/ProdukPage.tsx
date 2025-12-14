@@ -1,6 +1,12 @@
 import { useState, useCallback } from "react";
 import { Plus, Search, RotateCcw, Download, Eye, Edit, Trash2, Star, Package, TrendingUp, Activity, DollarSign } from "lucide-react";
 import { useProdukData, type ProdukEvent } from "./useProdukData";
+import { TambahProdukModal } from "./TambahProdukModal";
+import { EditProdukModal } from "./EditProdukModal";
+import { DetailProdukModal } from "./DetailProdukModal";
+import { ConfirmDeleteModal } from "../../components/ConfirmDeleteModal";
+import { ValidationModal } from "../../components/ValidationModal";
+import { deleteWithSync } from "../../utils/syncOperations";
 
 const formatCurrency = (value: number) =>
     new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(value);
@@ -13,6 +19,11 @@ export function ProdukPage() {
         statusProduk: "all",
         isPriority: "all",
     });
+    const [showTambahModal, setShowTambahModal] = useState(false);
+    const [detailProduk, setDetailProduk] = useState<ProdukEvent | null>(null);
+    const [editProduk, setEditProduk] = useState<ProdukEvent | null>(null);
+    const [deleteProduk, setDeleteProduk] = useState<ProdukEvent | null>(null);
+    const [validationError, setValidationError] = useState<{ title: string; message: string; details: string[]; suggestion: string } | null>(null);
 
     const { events } = useProdukData(filters.statusProduk, filters.isPriority);
 
@@ -23,6 +34,31 @@ export function ProdukPage() {
         }
         return true;
     });
+
+    // Handler untuk validasi sebelum menampilkan modal delete
+    const handleDeleteClick = (produk: ProdukEvent) => {
+        // Validasi: Block delete jika produk memiliki riwayat transaksi
+        if (produk.totalDikirim > 0 || produk.totalTerjual > 0) {
+            setValidationError({
+                title: "Tidak Dapat Menghapus",
+                message: `Produk "${produk.namaProduk}" sudah memiliki riwayat transaksi.`,
+                details: [
+                    `Total dikirim: ${produk.totalDikirim}`,
+                    `Total terjual: ${produk.totalTerjual}`,
+                ],
+                suggestion: "Non-aktifkan produk ini sebagai alternatif jika tidak ingin digunakan lagi.",
+            });
+            return;
+        }
+        // Jika validasi lolos, tampilkan modal confirm dengan captcha
+        setDeleteProduk(produk);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!deleteProduk) return;
+        await deleteWithSync("produk", "id_produk", deleteProduk.id);
+        setDeleteProduk(null);
+    };
 
     return (
         <div className="flex h-full w-full flex-col bg-white">
@@ -82,7 +118,10 @@ export function ProdukPage() {
                             <Download size={16} />
                             <span className="whitespace-nowrap">Export</span>
                         </button>
-                        <button className="flex h-9 flex-1 items-center justify-center gap-2 bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 lg:flex-none">
+                        <button
+                            onClick={() => setShowTambahModal(true)}
+                            className="flex h-9 flex-1 items-center justify-center gap-2 bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 lg:flex-none"
+                        >
                             <Plus size={16} />
                             <span className="whitespace-nowrap">Produk</span>
                         </button>
@@ -113,18 +152,70 @@ export function ProdukPage() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredRows.map((row) => <EventRow key={row.id} row={row} />)
+                                    filteredRows.map((row) => (
+                                        <EventRow
+                                            key={row.id}
+                                            row={row}
+                                            onDetail={() => setDetailProduk(row)}
+                                            onEdit={() => setEditProduk(row)}
+                                            onDelete={() => handleDeleteClick(row)}
+                                        />
+                                    ))
                                 )}
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
+
+            {/* Modals */}
+            {showTambahModal && (
+                <TambahProdukModal onClose={() => setShowTambahModal(false)} onSave={() => { }} />
+            )}
+            {detailProduk && (
+                <DetailProdukModal
+                    produk={detailProduk}
+                    onClose={() => setDetailProduk(null)}
+                />
+            )}
+            {editProduk && (
+                <EditProdukModal
+                    produk={{
+                        id_produk: editProduk.id,
+                        nama_produk: editProduk.namaProduk,
+                        harga_satuan: editProduk.hargaSatuan,
+                        status_produk: editProduk.statusProduk,
+                        is_priority: editProduk.isPriority,
+                        priority_order: editProduk.priorityOrder,
+                    }}
+                    onClose={() => setEditProduk(null)}
+                    onSave={() => { }}
+                />
+            )}
+            {deleteProduk && (
+                <ConfirmDeleteModal
+                    title="Hapus Produk"
+                    message="Anda yakin ingin menghapus produk ini?"
+                    itemName={deleteProduk.namaProduk}
+                    onConfirm={handleConfirmDelete}
+                    onCancel={() => setDeleteProduk(null)}
+                />
+            )}
+            {validationError && (
+                <ValidationModal
+                    type="warning"
+                    title={validationError.title}
+                    message={validationError.message}
+                    details={validationError.details}
+                    suggestion={validationError.suggestion}
+                    onClose={() => setValidationError(null)}
+                />
+            )}
         </div>
     );
 }
 
-function EventRow({ row }: { row: ProdukEvent }) {
+function EventRow({ row, onDetail, onEdit, onDelete }: { row: ProdukEvent; onDetail: () => void; onEdit: () => void; onDelete: () => void }) {
     const stokColor = row.stokDiToko < 0 ? "text-red-600" : row.stokDiToko === 0 ? "text-yellow-600" : "text-green-600";
 
     return (
@@ -180,9 +271,9 @@ function EventRow({ row }: { row: ProdukEvent }) {
             {/* Aksi */}
             <td className="w-[12%] border-r border-slate-200 pl-4 py-3">
                 <div className="flex items-center gap-1">
-                    <button className="p-1.5 hover:bg-blue-50 text-blue-600" title="Detail"><Eye size={16} /></button>
-                    <button className="p-1.5 hover:bg-amber-50 text-amber-600" title="Edit"><Edit size={16} /></button>
-                    <button className="p-1.5 hover:bg-red-50 text-red-600" title="Hapus"><Trash2 size={16} /></button>
+                    <button onClick={onDetail} className="p-1.5 hover:bg-blue-50 text-blue-600" title="Detail"><Eye size={16} /></button>
+                    <button onClick={onEdit} className="p-1.5 hover:bg-amber-50 text-amber-600" title="Edit"><Edit size={16} /></button>
+                    <button onClick={onDelete} className="p-1.5 hover:bg-red-50 text-red-600" title="Hapus"><Trash2 size={16} /></button>
                 </div>
             </td>
         </tr>

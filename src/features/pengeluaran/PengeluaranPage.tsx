@@ -2,7 +2,11 @@ import { useState, useCallback, useMemo } from "react";
 import { List } from "react-window";
 import { Plus, Search, Calendar, RotateCcw, Download, Eye, Edit, Trash2, ImageIcon } from "lucide-react";
 import { TambahPengeluaranModal } from "./TambahPengeluaranModal";
+import { DetailPengeluaranModal } from "./DetailPengeluaranModal";
+import { EditPengeluaranModal } from "./EditPengeluaranModal";
+import { SimpleConfirmDeleteModal } from "../../components/SimpleConfirmDeleteModal";
 import { usePengeluaranData, type DateRangeKey, type PengeluaranEvent } from "./usePengeluaranData";
+import { deleteWithSync } from "../../utils/syncOperations";
 
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
     { key: "all", label: "Semua Waktu" },
@@ -19,6 +23,9 @@ const formatCurrency = (value: number) =>
 export function PengeluaranPage() {
     const [filters, setFilters] = useState({ search: "", dateRange: "all" as DateRangeKey });
     const [showTambahModal, setShowTambahModal] = useState(false);
+    const [detailPengeluaran, setDetailPengeluaran] = useState<PengeluaranEvent | null>(null);
+    const [editPengeluaran, setEditPengeluaran] = useState<PengeluaranEvent | null>(null);
+    const [deletePengeluaran, setDeletePengeluaran] = useState<PengeluaranEvent | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
     const { events, totalPengeluaran } = usePengeluaranData(filters.dateRange);
@@ -30,6 +37,17 @@ export function PengeluaranPage() {
     }, [events, filters.search]);
 
     const handleRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+    // Handler untuk delete - pengeluaran tidak memiliki child data jadi langsung bisa delete
+    const handleDeleteClick = useCallback((pengeluaran: PengeluaranEvent) => {
+        setDeletePengeluaran(pengeluaran);
+    }, []);
+
+    const handleConfirmDelete = async () => {
+        if (!deletePengeluaran) return;
+        await deleteWithSync("pengeluaran_operasional", "id_pengeluaran", deletePengeluaran.id);
+        setDeletePengeluaran(null);
+    };
 
     return (
         <div className="flex h-full w-full flex-col bg-white">
@@ -153,9 +171,27 @@ export function PengeluaranPage() {
                                                 {/* Aksi */}
                                                 <div className="w-[15%] border-r border-slate-200 pl-4 py-2">
                                                     <div className="flex items-center gap-1">
-                                                        <button className="p-1 hover:bg-blue-50 text-blue-600" title="Detail"><Eye size={14} /></button>
-                                                        <button className="p-1 hover:bg-amber-50 text-amber-600" title="Edit"><Edit size={14} /></button>
-                                                        <button className="p-1 hover:bg-red-50 text-red-600" title="Hapus"><Trash2 size={14} /></button>
+                                                        <button
+                                                            className="p-1 hover:bg-blue-50 text-blue-600"
+                                                            title="Detail"
+                                                            onClick={() => setDetailPengeluaran(row)}
+                                                        >
+                                                            <Eye size={14} />
+                                                        </button>
+                                                        <button
+                                                            className="p-1 hover:bg-amber-50 text-amber-600"
+                                                            title="Edit"
+                                                            onClick={() => setEditPengeluaran(row)}
+                                                        >
+                                                            <Edit size={14} />
+                                                        </button>
+                                                        <button
+                                                            className="p-1 hover:bg-red-50 text-red-600"
+                                                            title="Hapus"
+                                                            onClick={() => handleDeleteClick(row)}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -168,8 +204,31 @@ export function PengeluaranPage() {
                 </div>
             </div>
 
+            {/* Modals */}
             {showTambahModal && (
                 <TambahPengeluaranModal onClose={() => setShowTambahModal(false)} onSave={handleRefresh} />
+            )}
+            {detailPengeluaran && (
+                <DetailPengeluaranModal
+                    pengeluaran={detailPengeluaran}
+                    onClose={() => setDetailPengeluaran(null)}
+                />
+            )}
+            {editPengeluaran && (
+                <EditPengeluaranModal
+                    pengeluaran={editPengeluaran}
+                    onClose={() => setEditPengeluaran(null)}
+                    onSave={handleRefresh}
+                />
+            )}
+            {deletePengeluaran && (
+                <SimpleConfirmDeleteModal
+                    title="Hapus Pengeluaran"
+                    message="Anda yakin ingin menghapus pengeluaran ini?"
+                    itemName={`#${deletePengeluaran.id} - ${deletePengeluaran.keterangan.substring(0, 30)}${deletePengeluaran.keterangan.length > 30 ? '...' : ''}`}
+                    onConfirm={handleConfirmDelete}
+                    onCancel={() => setDeletePengeluaran(null)}
+                />
             )}
         </div>
     );

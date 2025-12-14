@@ -7,6 +7,8 @@ import { dateRangeToWindow, type DateRangeKey } from "./dateRange";
 import { PengirimanDetailModal } from "./PengirimanDetailModal";
 import { PengirimanEditModal } from "./PengirimanEditModal";
 import { TambahPembayaranModal } from "./TambahPembayaranModal";
+import { SimpleConfirmDeleteModal } from "../../components/SimpleConfirmDeleteModal";
+import { deleteWithSync } from "../../utils/syncOperations";
 import {
   Calendar,
   Download,
@@ -40,6 +42,7 @@ export function PembayaranPage() {
   // Modal state
   const [detailModalRow, setDetailModalRow] = useState<PengirimanDashboardRow | null>(null);
   const [editModalRow, setEditModalRow] = useState<PengirimanDashboardRow | null>(null);
+  const [deleteModalRow, setDeleteModalRow] = useState<PengirimanDashboardRow | null>(null);
   const [showTambahModal, setShowTambahModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -54,6 +57,28 @@ export function PembayaranPage() {
   const handleSaveEdit = useCallback(() => {
     setRefreshKey((k) => k + 1);
   }, []);
+
+  const handleDeleteClick = useCallback((row: PengirimanDashboardRow) => {
+    setDeleteModalRow(row);
+  }, []);
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModalRow?.id_pengiriman) return;
+
+    // Delete all detail_pengiriman first
+    const details = await db.detail_pengiriman
+      .where("id_pengiriman")
+      .equals(deleteModalRow.id_pengiriman)
+      .toArray();
+
+    for (const detail of details) {
+      await deleteWithSync("detail_pengiriman", "id_detail_kirim", detail.id_detail_kirim);
+    }
+
+    // Then delete the pengiriman
+    await deleteWithSync("pengiriman", "id_pengiriman", deleteModalRow.id_pengiriman);
+    setDeleteModalRow(null);
+  };
 
   const rows =
     useLiveQuery(
@@ -404,6 +429,7 @@ export function PembayaranPage() {
                             <button
                               className="flex size-7 items-center justify-center rounded-sm border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300 transition-colors"
                               title="Hapus"
+                              onClick={() => handleDeleteClick(row)}
                             >
                               <Trash2 size={14} />
                             </button>
@@ -442,6 +468,17 @@ export function PembayaranPage() {
         <TambahPembayaranModal
           onClose={() => setShowTambahModal(false)}
           onSave={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalRow && (
+        <SimpleConfirmDeleteModal
+          title="Hapus Pengiriman"
+          message="Anda yakin ingin menghapus pengiriman ini? Semua detail barang terkait juga akan dihapus."
+          itemName={`#${deleteModalRow.id_pengiriman} - ${deleteModalRow.nama_toko ?? 'Unknown'}`}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeleteModalRow(null)}
         />
       )}
     </div>

@@ -8,6 +8,64 @@ const primaryKeyByTable = new Map<string, string>(
   supabaseTables.flatMap((t) => (t.pkField ? [[t.name, t.pkField] as const] : [])),
 );
 
+type ForeignKeyEdge = {
+  parentTable: string;
+  parentPkField: string;
+  childTable: string;
+  childField: string;
+};
+
+/**
+ * Relasi FK yang dipakai oleh frontend (Dexie/outbox) untuk remapping local negative-id -> remote id.
+ * Tidak mengubah apapun di Supabase; hanya dipakai untuk memperbaiki sinkronisasi sisi klien.
+ */
+const FOREIGN_KEYS: ForeignKeyEdge[] = [
+  { parentTable: "sales", parentPkField: "id_sales", childTable: "toko", childField: "id_sales" },
+  { parentTable: "toko", parentPkField: "id_toko", childTable: "pengiriman", childField: "id_toko" },
+  { parentTable: "toko", parentPkField: "id_toko", childTable: "penagihan", childField: "id_toko" },
+  {
+    parentTable: "pengiriman",
+    parentPkField: "id_pengiriman",
+    childTable: "detail_pengiriman",
+    childField: "id_pengiriman",
+  },
+  { parentTable: "produk", parentPkField: "id_produk", childTable: "detail_pengiriman", childField: "id_produk" },
+  {
+    parentTable: "penagihan",
+    parentPkField: "id_penagihan",
+    childTable: "detail_penagihan",
+    childField: "id_penagihan",
+  },
+  { parentTable: "produk", parentPkField: "id_produk", childTable: "detail_penagihan", childField: "id_produk" },
+  {
+    parentTable: "penagihan",
+    parentPkField: "id_penagihan",
+    childTable: "potongan_penagihan",
+    childField: "id_penagihan",
+  },
+];
+
+const fkEdgesByParent = new Map<string, ForeignKeyEdge[]>();
+const fkEdgesByChild = new Map<string, ForeignKeyEdge[]>();
+for (const edge of FOREIGN_KEYS) {
+  fkEdgesByParent.set(edge.parentTable, [...(fkEdgesByParent.get(edge.parentTable) ?? []), edge]);
+  fkEdgesByChild.set(edge.childTable, [...(fkEdgesByChild.get(edge.childTable) ?? []), edge]);
+}
+
+class DeferredDependencyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DeferredDependencyError";
+  }
+}
+
+function computeBackoffMs(attempt: number): number {
+  // 1,2,3... -> 1.5s, 3s, 6s, 12s ... max 60s
+  const base = 1500;
+  const ms = base * Math.pow(2, Math.max(0, attempt - 1));
+  return Math.min(60_000, ms);
+}
+
 type WorkerOptions = {
   pollMs?: number;
   maxAttempts?: number;
@@ -58,13 +116,16 @@ export function createOutboxWorker(options: WorkerOptions = {}): OutboxWorker {
 
 async function claimNextPendingItem(): Promise<OutboxItem | undefined> {
   return db.transaction("rw", db.outbox, async () => {
-    const item = await db.outbox
+    const now = Date.now();
+    const candidates = await db.outbox
       .where("[status+createdAt]")
       .between(["pending", Dexie.minKey], ["pending", Dexie.maxKey])
-      .first();
+      .limit(25)
+      .toArray();
+    const item = candidates.find((i) => !i.nextAttemptAt || i.nextAttemptAt <= now);
     if (!item?.id) return;
-    await db.outbox.update(item.id, { status: "processing", updatedAt: Date.now() });
-    return { ...item, status: "processing" };
+    await db.outbox.update(item.id, { status: "processing", nextAttemptAt: undefined, updatedAt: now });
+    return { ...item, status: "processing", nextAttemptAt: undefined };
   });
 }
 
@@ -78,22 +139,45 @@ async function processItemSequentially(
     await db.outbox.update(item.id, {
       status: "error",
       lastError: `max attempts reached (${maxAttempts})`,
+      nextAttemptAt: undefined,
       updatedAt: Date.now(),
     });
     return;
   }
 
   try {
-    const result = await syncToSupabase(supabase, item);
+    const ack = item.remoteAck as SyncResult | undefined;
+    const result = ack ?? (await syncToSupabase(supabase, item));
+    if (!ack) {
+      await db.outbox.update(item.id, { remoteAck: result, updatedAt: Date.now() });
+    }
     await applyLocalSideEffects(item, result);
-    await db.outbox.update(item.id, { status: "done", updatedAt: Date.now() });
+    await db.outbox.update(item.id, {
+      status: "done",
+      remoteAck: undefined,
+      nextAttemptAt: undefined,
+      updatedAt: Date.now(),
+    });
   } catch (err) {
+    if (err instanceof DeferredDependencyError) {
+      const now = Date.now();
+      await db.outbox.update(item.id, {
+        status: "pending",
+        lastError: err.message,
+        nextAttemptAt: now + 1200,
+        updatedAt: now,
+      });
+      return;
+    }
     const msg = err instanceof Error ? err.message : String(err);
+    const now = Date.now();
+    const nextAttempts = item.attempts + 1;
     await db.outbox.update(item.id, {
       status: "pending",
-      attempts: item.attempts + 1,
+      attempts: nextAttempts,
       lastError: msg,
-      updatedAt: Date.now(),
+      nextAttemptAt: now + computeBackoffMs(nextAttempts),
+      updatedAt: now,
     });
   }
 }
@@ -112,14 +196,14 @@ type SyncResult =
 
 async function syncToSupabase(supabase: SupabaseClient, item: OutboxItem): Promise<SyncResult> {
   const pkField = item.pkField ?? primaryKeyByTable.get(item.table);
-  const payload = { ...item.payload };
+  const payload = await resolvePayloadIds(item.table, item.payload);
 
   if (item.op === "insert") {
+    if (!pkField) throw new Error(`missing pkField for '${item.table}' operation 'insert'`);
     if (pkField) delete payload[pkField];
     delete payload.__local;
     const { data, error } = await supabase.from(item.table).insert(payload).select("*").single();
     if (error) throw new Error(error.message);
-    if (!pkField) return { kind: "upserted", row: data as Record<string, unknown> };
     const remotePk = (data as Record<string, unknown>)[pkField] as number | string | undefined;
     if (remotePk === undefined) throw new Error(`missing pk field '${pkField}' from insert result`);
     return {
@@ -137,11 +221,12 @@ async function syncToSupabase(supabase: SupabaseClient, item: OutboxItem): Promi
     | string
     | undefined;
   if (pkValue === undefined) throw new Error(`missing pkValue for '${item.table}.${pkField}'`);
+  const resolvedPkValue = await resolveEntityPrimaryKey(item.table, pkValue);
 
   if (item.op === "delete") {
-    const { error } = await supabase.from(item.table).delete().eq(pkField, pkValue);
+    const { error } = await supabase.from(item.table).delete().eq(pkField, resolvedPkValue);
     if (error) throw new Error(error.message);
-    return { kind: "deleted", pkField, pkValue };
+    return { kind: "deleted", pkField, pkValue: resolvedPkValue };
   }
 
   const clean = { ...payload };
@@ -152,7 +237,7 @@ async function syncToSupabase(supabase: SupabaseClient, item: OutboxItem): Promi
     const { data, error } = await supabase
       .from(item.table)
       .update(clean)
-      .eq(pkField, pkValue)
+      .eq(pkField, resolvedPkValue)
       .select("*")
       .single();
     if (error) throw new Error(error.message);
@@ -161,7 +246,7 @@ async function syncToSupabase(supabase: SupabaseClient, item: OutboxItem): Promi
 
   const { data, error } = await supabase
     .from(item.table)
-    .upsert({ ...clean, [pkField]: pkValue })
+    .upsert({ ...clean, [pkField]: resolvedPkValue })
     .select("*")
     .single();
   if (error) throw new Error(error.message);
@@ -181,7 +266,8 @@ async function applyLocalSideEffects(item: OutboxItem, result: SyncResult): Prom
     return;
   }
 
-  await db.transaction("rw", db.id_map, db.outbox, db.table(item.table), async () => {
+  const txTables = collectTablesForIdRemap(item.table);
+  await db.transaction("rw", [db.id_map, db.outbox, ...txTables], async () => {
     await db.table(item.table).put(result.row);
 
     if (result.localPk === undefined || result.localPk === null) return;
@@ -195,8 +281,8 @@ async function applyLocalSideEffects(item: OutboxItem, result: SyncResult): Prom
     });
 
     await replacePrimaryKey(item.table, result.pkField, result.localPk, result.remotePk, result.row);
-    await remapForeignKeys(item.table, result.localPk, result.remotePk);
-    await remapOutboxPayloads(item.table, result.localPk, result.remotePk);
+    await remapLocalForeignKeys(item.table, result.localPk, result.remotePk);
+    await remapOutboxReferences(item.table, result.pkField, result.localPk, result.remotePk);
   });
 }
 
@@ -212,23 +298,93 @@ async function replacePrimaryKey(
   await table.put({ ...remoteRow, [pkField]: remotePk });
 }
 
-async function remapForeignKeys(entity: string, localId: number | string, remoteId: number | string) {
-  if (entity !== "sales") return;
-  if (typeof localId !== "number" || typeof remoteId !== "number") return;
-  await db.toko.where("id_sales").equals(localId).modify({ id_sales: remoteId });
+function collectTablesForIdRemap(entity: string): Dexie.Table[] {
+  const names = new Set<string>();
+  names.add(entity);
+  for (const edge of fkEdgesByParent.get(entity) ?? []) names.add(edge.childTable);
+  return [...names].map((n) => db.table(n));
 }
 
-async function remapOutboxPayloads(entity: string, localId: number | string, remoteId: number | string) {
-  if (entity !== "sales") return;
-
-  const pending = await db.outbox.where("status").equals("pending").toArray();
-  for (const item of pending) {
-    if (!item.id) continue;
-    const payloadId = item.payload.id_sales;
-    if (payloadId !== localId) continue;
-    const nextPayload = { ...item.payload, id_sales: remoteId };
-    await db.outbox.update(item.id, { payload: nextPayload, updatedAt: Date.now() });
+async function remapLocalForeignKeys(entity: string, localId: number | string, remoteId: number | string) {
+  const edges = fkEdgesByParent.get(entity) ?? [];
+  for (const edge of edges) {
+    if (typeof localId !== "number" || typeof remoteId !== "number") continue;
+    await db
+      .table(edge.childTable)
+      .where(edge.childField)
+      .equals(localId as never)
+      .modify({ [edge.childField]: remoteId } as never);
   }
+}
+
+async function remapOutboxReferences(
+  entity: string,
+  pkField: string,
+  localId: number | string,
+  remoteId: number | string,
+) {
+  const candidates = await db.outbox.where("status").anyOf("pending", "processing", "error").toArray();
+  const edges = fkEdgesByParent.get(entity) ?? [];
+
+  for (const item of candidates) {
+    if (!item.id) continue;
+
+    let changed = false;
+    const next: Partial<OutboxItem> = {};
+
+    if (item.table === entity) {
+      if (item.pkValue === localId) {
+        next.pkValue = remoteId;
+        changed = true;
+      }
+      if (item.payload?.[pkField] === localId) {
+        next.payload = { ...item.payload, [pkField]: remoteId };
+        changed = true;
+      }
+    }
+
+    for (const edge of edges) {
+      if (item.payload?.[edge.childField] !== localId) continue;
+      next.payload = { ...(next.payload ?? item.payload), [edge.childField]: remoteId };
+      changed = true;
+    }
+
+    if (!changed) continue;
+    next.updatedAt = Date.now();
+    await db.outbox.update(item.id, next);
+  }
+}
+
+async function resolvePayloadIds(
+  tableName: string,
+  raw: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const next = { ...raw } as Record<string, unknown>;
+  const refs = fkEdgesByChild.get(tableName) ?? [];
+  for (const edge of refs) {
+    const v = next[edge.childField];
+    if (typeof v !== "number" || v >= 0) continue;
+    const mapped = await getMappedRemoteId(edge.parentTable, v);
+    if (mapped === undefined) {
+      throw new DeferredDependencyError(
+        `waiting FK map: ${tableName}.${edge.childField}=${v} -> ${edge.parentTable}.${edge.parentPkField}`,
+      );
+    }
+    next[edge.childField] = mapped;
+  }
+  return next;
+}
+
+async function resolveEntityPrimaryKey(entity: string, pkValue: number | string): Promise<number | string> {
+  if (typeof pkValue !== "number" || pkValue >= 0) return pkValue;
+  const mapped = await getMappedRemoteId(entity, pkValue);
+  if (mapped === undefined) throw new DeferredDependencyError(`waiting PK map: ${entity} id=${pkValue}`);
+  return mapped;
+}
+
+async function getMappedRemoteId(entity: string, localId: number): Promise<number | string | undefined> {
+  const row = await db.id_map.where("[entity+localId]").equals([entity, localId]).first();
+  return row?.remoteId;
 }
 
 export async function getOutboxSummary(): Promise<{ pending: number; processing: number; error: number }> {

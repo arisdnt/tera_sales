@@ -83,7 +83,7 @@ export async function insertWithSync(
     tableName: string,
     pkField: string,
     payload: Record<string, unknown>
-): Promise<void> {
+): Promise<number> {
     const localId = makeLocalNegativeId();
     const now = new Date().toISOString();
 
@@ -118,4 +118,6 @@ export async function insertWithSync(
             updatedAt: Date.now(),
         });
     });
+
+    return localId;
 }
