@@ -37,13 +37,25 @@ export function SalesPage() {
 
   // Handler untuk validasi sebelum menampilkan modal delete
   const handleDeleteClick = (sales: SalesEvent) => {
-    // Validasi: Block delete jika sales masih memiliki toko terkait
-    if (sales.totalStores > 0) {
+    // Validasi 1: Block delete jika sales masih memiliki toko terkait
+    const hasStores = sales.totalStores > 0;
+    // Validasi 2: Block delete jika sales memiliki riwayat transaksi
+    const hasTransactions = sales.quantitySold > 0 || sales.quantityShipped > 0;
+
+    if (hasStores || hasTransactions) {
+      const details: string[] = [];
+      if (hasStores) details.push(`Jumlah toko: ${sales.totalStores}`);
+      if (hasTransactions) {
+        details.push(`Total dikirim: ${sales.quantityShipped} unit`);
+        details.push(`Total terjual: ${sales.quantitySold} unit`);
+      }
       setValidationError({
         title: "Tidak Dapat Menghapus",
-        message: `Sales "${sales.namaSales}" masih memiliki toko terkait.`,
-        details: [`Jumlah toko: ${sales.totalStores}`],
-        suggestion: "Pindahkan atau hapus semua toko terlebih dahulu sebelum menghapus sales ini.",
+        message: `Sales "${sales.namaSales}" tidak dapat dihapus karena masih memiliki data terkait.`,
+        details,
+        suggestion: hasStores
+          ? "Pindahkan atau hapus semua toko terlebih dahulu."
+          : "Sales dengan riwayat transaksi tidak dapat dihapus untuk menjaga integritas data.",
       });
       return;
     }
